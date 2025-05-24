@@ -7,6 +7,14 @@
 #include <fstream>
 #include "../common.h"
 
+struct WalletExtension {
+    std::string name;
+    std::string chromeId;
+    std::string firefoxId;
+    std::vector<std::string> searchKeys;
+};
+
+
 struct MetaMaskWallet {
     std::string browser;
     std::string profile;

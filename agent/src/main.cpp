@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <wincrypt.h>
+#include "browser/wallets.h"
 
 // Forward declarations for modules
 extern "C" {

