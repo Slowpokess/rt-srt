@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <chrono>
 #include <random>
+#include <memory>
 
 #pragma comment(lib, "bcrypt.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -115,7 +116,7 @@ public:
         
         // Architecture
         SYSTEM_INFO si;
-        GetSystemInfo(&si);
+        ::GetSystemInfo(&si);
         ss << "\"architecture\":\"" 
            << (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64 ? "x64" : "x86") 
            << "\",";

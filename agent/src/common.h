@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 // Version information
 #define AGENT_VERSION "1.0.0"
@@ -65,7 +66,7 @@ public:
         DEBUG = 0,
         INFO = 1,
         WARNING = 2,
-        ERROR = 3,
+        ERROR_LEVEL = 3,
         CRITICAL = 4
     };
     

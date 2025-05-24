@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <wincrypt.h>
 
 // Forward declarations for modules
 extern "C" {
