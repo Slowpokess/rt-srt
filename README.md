@@ -26,6 +26,9 @@ RT-SRT/
 
 ### Building the Project
 
+⚠️ **IMPORTANT**: See [BUILD_INSTRUCTIONS.md](BUILD_INSTRUCTIONS.md) for detailed build instructions!
+
+**Quick Start:**
 ```bash
 # Clone the repository
 git clone <repository-url>

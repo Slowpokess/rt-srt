@@ -543,7 +543,7 @@ private:
     }
 };
 
-// Export function for main agent
+// Export functions for main agent
 extern "C" {
     bool CheckEnvironment() {
         AntiVMDetector detector;
@@ -556,6 +556,19 @@ extern "C" {
         } else {
             extern void LogInfo(const char*);
             LogInfo("Environment check passed - no VM detected");
+        }
+        
+        return isClean;
+    }
+    
+    bool CheckVMEnvironment() {
+        AntiVMDetector detector;
+        bool isClean = detector.CheckEnvironment();
+        
+        if (!isClean) {
+            extern void LogWarning(const char*);
+            std::string warning = "Virtual machine detected: " + detector.GetDetectedVM();
+            LogWarning(warning.c_str());
         }
         
         return isClean;

