@@ -4,18 +4,11 @@
 #include <vector>
 #include "../common.h"
 
-// PE Headers structures
-#pragma pack(push, 1)
-typedef struct _IMAGE_BASE_RELOCATION {
-    DWORD VirtualAddress;
-    DWORD SizeOfBlock;
-} IMAGE_BASE_RELOCATION, *PIMAGE_BASE_RELOCATION;
+// Logging functions
+extern void LogInfo(const char* message);
+extern void LogError(const char* message);
 
-typedef struct _IMAGE_IMPORT_BY_NAME {
-    WORD Hint;
-    CHAR Name[1];
-} IMAGE_IMPORT_BY_NAME, *PIMAGE_IMPORT_BY_NAME;
-#pragma pack(pop)
+// PE Headers structures are already defined in windows.h
 
 class InMemoryLoader {
 private:
@@ -206,12 +199,12 @@ private:
                 
                 if (origThunk->u1.Ordinal & IMAGE_ORDINAL_FLAG) {
                     // Import by ordinal
-                    funcAddr = GetProcAddress(hLib, (LPCSTR)(origThunk->u1.Ordinal & 0xFFFF));
+                    funcAddr = (void*)GetProcAddress(hLib, (LPCSTR)(origThunk->u1.Ordinal & 0xFFFF));
                 } else {
                     // Import by name
                     PIMAGE_IMPORT_BY_NAME importByName = (PIMAGE_IMPORT_BY_NAME)
                         ((uint8_t*)allocatedMemory + origThunk->u1.AddressOfData);
-                    funcAddr = GetProcAddress(hLib, importByName->Name);
+                    funcAddr = (void*)GetProcAddress(hLib, importByName->Name);
                 }
                 
                 if (!funcAddr) {
@@ -284,12 +277,10 @@ extern "C" {
                 return false;
             }
             
-            extern void LogInfo(const char*);
             LogInfo("PE loaded successfully in memory");
             
             return true;
         } catch (...) {
-            extern void LogError(const char*);
             LogError("Failed to load PE in memory");
             
             g_loader.reset();
@@ -309,7 +300,6 @@ extern "C" {
     
     void UnloadPE() {
         if (g_loader) {
-            extern void LogInfo(const char*);
             LogInfo("Unloading PE from memory");
             
             g_loader.reset();
@@ -323,7 +313,6 @@ extern "C" {
         if (!entryPoint) return false;
         
         try {
-            extern void LogInfo(const char*);
             LogInfo("Executing loaded PE");
             
             // Execute as DLL entry point
@@ -334,7 +323,6 @@ extern "C" {
             
             return result == TRUE;
         } catch (...) {
-            extern void LogError(const char*);
             LogError("Exception during PE execution");
             return false;
         }

@@ -7,8 +7,12 @@
 #include <sstream>
 #include <memory>
 #include "../common.h"
-#include "sqlite_minimal.cpp"
+#include "sqlite_minimal.h"
 #include "wallets.h"
+
+// Logging functions
+extern void LogInfo(const char* message);
+extern void LogError(const char* message);
 
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")

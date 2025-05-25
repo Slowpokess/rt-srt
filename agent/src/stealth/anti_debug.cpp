@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "../common.h"
+#include "../logger/file_logger.h"
 
 // Function pointer types for NTAPI
 typedef NTSTATUS (NTAPI *pNtQueryInformationProcess)(HANDLE, PROCESSINFOCLASS, PVOID, ULONG, PULONG);
@@ -31,7 +32,7 @@ public:
     }
     
     bool IsDebuggerPresent() {
-        // Multiple debugger detection methods
+        // Basic debugger detection methods
         if (CheckIsDebuggerPresent()) return true;
         if (CheckRemoteDebugger()) return true;
         if (CheckPEB()) return true;
@@ -46,6 +47,13 @@ public:
         if (CheckParentProcess()) return true;
         if (CheckSystemDebugger()) return true;
         if (CheckDebugPrivilege()) return true;
+        
+        // Advanced detection methods
+        if (CheckTimingAttacks()) return true;
+        if (CheckAPIHooks()) return true;
+        if (CheckMemoryScanning()) return true;
+        if (CheckRDTSCTiming()) return true;
+        if (CheckExceptionHandling()) return true;
         
         return false;
     }
@@ -194,12 +202,12 @@ private:
     bool CheckInt3() {
         // Check common API functions for INT3 breakpoints
         PVOID functions[] = {
-            GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "CreateFileW"),
-            GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "OpenProcess"),
-            GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "ReadProcessMemory"),
-            GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "WriteProcessMemory"),
-            GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQuerySystemInformation"),
-            GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "CreateFileW"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "OpenProcess"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "ReadProcessMemory"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "WriteProcessMemory"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQuerySystemInformation"),
+            (PVOID)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess"),
         };
         
         for (PVOID func : functions) {
@@ -385,6 +393,168 @@ private:
         return false;
     }
     
+    // Advanced timing attack detection
+    bool CheckTimingAttacks() {
+        LARGE_INTEGER start, end, freq;
+        QueryPerformanceFrequency(&freq);
+        
+        // Test multiple timing scenarios
+        for (int i = 0; i < 5; i++) {
+            QueryPerformanceCounter(&start);
+            
+            // Execute some operations
+            volatile int dummy = 0;
+            for (int j = 0; j < 1000; j++) {
+                dummy += j * j;
+            }
+            
+            QueryPerformanceCounter(&end);
+            
+            // Calculate time in microseconds
+            double timeTaken = (double)(end.QuadPart - start.QuadPart) * 1000000.0 / freq.QuadPart;
+            
+            // If timing is significantly slower, might be in debugger/sandbox
+            if (timeTaken > 1000.0) { // More than 1ms for simple operations
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    // Check for API hooks (common in sandboxes)
+    bool CheckAPIHooks() {
+        struct APICheck {
+            const char* module;
+            const char* function;
+            BYTE expectedBytes[5]; // First 5 bytes
+        };
+        
+        APICheck checks[] = {
+            {"kernel32.dll", "CreateFileW", {0x48, 0x89, 0x5C, 0x24, 0x08}}, // mov [rsp+8], rbx (typical start)
+            {"kernel32.dll", "CreateProcessW", {0x48, 0x89, 0x5C, 0x24, 0x08}},
+            {"ntdll.dll", "NtCreateFile", {0x4C, 0x8B, 0xD1, 0xB8, 0x55}}, // mov r10, rcx; mov eax, 55h
+            {"ntdll.dll", "NtQueryInformationProcess", {0x4C, 0x8B, 0xD1, 0xB8, 0x19}},
+            {"kernel32.dll", "WriteFile", {0x48, 0x89, 0x5C, 0x24, 0x08}}
+        };
+        
+        for (const auto& check : checks) {
+            HMODULE hMod = GetModuleHandleA(check.module);
+            if (!hMod) continue;
+            
+            PVOID pFunc = (PVOID)GetProcAddress(hMod, check.function);
+            if (!pFunc) continue;
+            
+            PBYTE pBytes = (PBYTE)pFunc;
+            
+            // Check for common hook signatures
+            if (pBytes[0] == 0xE9 || pBytes[0] == 0xE8) { // JMP or CALL (hook)
+                return true;
+            }
+            
+            if (pBytes[0] == 0x68) { // PUSH (inline hook)
+                return true;
+            }
+            
+            // Check for unexpected modifications
+            bool matches = true;
+            for (int i = 0; i < 5; i++) {
+                // Allow some variation but check for obvious hooks
+                if (pBytes[i] == 0xCC || pBytes[i] == 0xC3) { // INT3 or RET
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    // Check for memory scanning patterns (sandbox behavior)
+    bool CheckMemoryScanning() {
+        // Allocate memory with specific pattern
+        SIZE_T size = 0x10000;
+        PVOID pMem = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        if (!pMem) return false;
+        
+        // Fill with pattern
+        DWORD pattern = 0xDEADBEEF;
+        for (SIZE_T i = 0; i < size / sizeof(DWORD); i++) {
+            ((PDWORD)pMem)[i] = pattern;
+        }
+        
+        Sleep(100); // Give sandbox time to scan
+        
+        // Check if pattern was modified (sign of memory scanning)
+        bool modified = false;
+        for (SIZE_T i = 0; i < size / sizeof(DWORD); i++) {
+            if (((PDWORD)pMem)[i] != pattern) {
+                modified = true;
+                break;
+            }
+        }
+        
+        VirtualFree(pMem, 0, MEM_RELEASE);
+        return modified;
+    }
+    
+    // Advanced RDTSC timing checks
+    bool CheckRDTSCTiming() {
+        DWORD64 tsc1, tsc2, tsc3;
+        
+        // First measurement
+        tsc1 = __rdtsc();
+        tsc2 = __rdtsc();
+        tsc3 = __rdtsc();
+        
+        // Check for irregular timing patterns
+        DWORD64 diff1 = tsc2 - tsc1;
+        DWORD64 diff2 = tsc3 - tsc2;
+        
+        // In virtual environment, RDTSC might have unusual patterns
+        if (diff1 > 1000 || diff2 > 1000 || abs((int)(diff2 - diff1)) > 500) {
+            return true;
+        }
+        
+        // Test with operations in between
+        tsc1 = __rdtsc();
+        Sleep(10);
+        tsc2 = __rdtsc();
+        
+        // 10ms should be roughly 10-30M cycles on modern CPUs
+        DWORD64 sleepCycles = tsc2 - tsc1;
+        if (sleepCycles < 1000000 || sleepCycles > 100000000) { // Too fast or too slow
+            return true;
+        }
+        
+        return false;
+    }
+    
+    // Check for exception handling manipulation
+    bool CheckExceptionHandling() {
+        volatile bool caught = false;
+        
+        // Use SetUnhandledExceptionFilter to detect debugging
+        LPTOP_LEVEL_EXCEPTION_FILTER originalFilter = SetUnhandledExceptionFilter(NULL);
+        SetUnhandledExceptionFilter(originalFilter);
+        
+        // If no exception filter is set, might be in debugger
+        if (originalFilter == NULL) {
+            return true;
+        }
+        
+        // Alternative check using VEH
+        PVOID vehHandler = AddVectoredExceptionHandler(1, [](PEXCEPTION_POINTERS) -> LONG {
+            return EXCEPTION_CONTINUE_SEARCH;
+        });
+        
+        if (vehHandler == NULL) {
+            return true; // VEH registration failed, might be debugger
+        }
+        
+        RemoveVectoredExceptionHandler(vehHandler);
+        return false;
+    }
+    
     // Hide thread from debugger
     void HideThread() {
         if (!NtSetInformationThread) return;
@@ -405,7 +575,7 @@ private:
         HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll");
         if (!hNtdll) return;
         
-        PVOID pDbgBreakPoint = GetProcAddress(hNtdll, "DbgBreakPoint");
+        PVOID pDbgBreakPoint = (PVOID)GetProcAddress(hNtdll, "DbgBreakPoint");
         if (!pDbgBreakPoint) return;
         
         DWORD oldProtect;
@@ -450,20 +620,22 @@ private:
     }
 };
 
-// Export functions for main agent
+// Define LogWarning as LogError if not available
+#ifndef LogWarning
+#define LogWarning LogError
+#endif
+
 extern "C" {
     bool CheckForDebugger() {
         AntiDebugProtection protection;
         bool debuggerDetected = protection.IsDebuggerPresent();
         
         if (debuggerDetected) {
-            extern void LogWarning(const char*);
             LogWarning("Debugger detected!");
             
             // Apply anti-debug protections
             protection.ApplyAntiDebugProtection();
         } else {
-            extern void LogInfo(const char*);
             LogInfo("No debugger detected");
         }
         
@@ -474,7 +646,25 @@ extern "C" {
         AntiDebugProtection protection;
         protection.ApplyAntiDebugProtection();
         
-        extern void LogInfo(const char*);
         LogInfo("Anti-debug protection applied");
+    }
+    
+    bool PerformCompleteAntiDebugCheck() {
+        AntiDebugProtection protection;
+        bool debuggerDetected = protection.IsDebuggerPresent();
+        
+        if (debuggerDetected) {
+            LogError("Debugger/Analysis tool detected - terminating");
+            
+            // Apply all protections
+            protection.ApplyAntiDebugProtection();
+            
+            // Additional evasive action
+            ExitProcess(1);
+        } else {
+            LogInfo("Anti-debug check passed");
+        }
+        
+        return !debuggerDetected;
     }
 }

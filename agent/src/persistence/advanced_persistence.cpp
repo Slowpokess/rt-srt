@@ -15,6 +15,7 @@
 #include <wbemidl.h>
 #include <ntstatus.h>
 #include "../common.h"
+#include "../logger/file_logger.h"
 
 #ifndef NT_SUCCESS
 #define NT_SUCCESS(Status) (((NTSTATUS)(Status)) >= 0)

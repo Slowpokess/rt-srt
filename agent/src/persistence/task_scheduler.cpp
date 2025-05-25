@@ -48,7 +48,7 @@ public:
         return success;
     }
     
-    bool RemovePersistence() {
+    bool RemoveTaskSchedulerPersistence() {
         bool removed = false;
         
         if (RemoveScheduledTask()) removed = true;
@@ -489,8 +489,8 @@ extern "C" {
         return success;
     }
     
-    bool RemovePersistence() {
+    bool RemoveTaskSchedulerPersistence() {
         TaskSchedulerPersistence persistence;
-        return persistence.RemovePersistence();
+        return persistence.RemoveTaskSchedulerPersistence();
     }
 }

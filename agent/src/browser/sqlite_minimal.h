@@ -5,6 +5,10 @@
 #include <tuple>
 #include <cstdint>
 
+// Utility functions
+std::string BytesToString(const std::vector<uint8_t>& data);
+int BytesToInt(const std::vector<uint8_t>& data);
+
 class MinimalSQLiteReader {
 public:
     bool LoadDatabase(const std::wstring& path);

