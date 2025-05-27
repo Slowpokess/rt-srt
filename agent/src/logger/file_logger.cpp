@@ -259,6 +259,10 @@ extern "C" {
         if (g_logger) g_logger->Error(message);
     }
     
+    void LogWarning(const char* message) {
+        if (g_logger) g_logger->Warning(message);
+    }
+    
     void LogDebug(const char* message) {
         if (g_logger) g_logger->Debug(message);
     }

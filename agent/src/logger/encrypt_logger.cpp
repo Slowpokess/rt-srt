@@ -374,4 +374,12 @@ extern "C" {
         }
         return "";
     }
+    
+    // Global wrapper function for EncryptLogs
+    std::vector<uint8_t> EncryptLogs() {
+        if (g_encryptedLogger) {
+            return g_encryptedLogger->EncryptLogs();
+        }
+        return std::vector<uint8_t>();
+    }
 }

