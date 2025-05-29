@@ -109,3 +109,4 @@ docs/.sphinx/
 *.zip
 *.7z
 *.rar
+*.env

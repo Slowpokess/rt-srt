@@ -15,7 +15,7 @@
 class EncryptedLogger {
 private:
     // AES-256 key (must match server)
-    static constexpr char AES_KEY[] = "your-32-character-aes-key-change";
+    static constexpr char AES_KEY[] = "d252cf8eb2cca12d1e731ed3e362504e";
     static constexpr size_t AES_KEY_SIZE = 32;
     static constexpr size_t AES_BLOCK_SIZE = 16;
     

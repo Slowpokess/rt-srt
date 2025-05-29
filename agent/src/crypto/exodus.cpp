@@ -7,6 +7,13 @@
 #include "../common.h"
 #include "../logger/file_logger.h"
 
+// External logging functions
+extern "C" {
+    void LogInfo(const char* message);
+    void LogError(const char* message);
+    void LogWarning(const char* message);
+}
+
 class ExodusWalletExtractor {
 private:
     struct ExodusWallet {
@@ -277,6 +284,12 @@ static std::unique_ptr<ExodusWalletExtractor> g_exodusExtractor;
 extern "C" {
     bool InitializeExodusExtractor() {
         try {
+            // Check if already initialized
+            if (g_exodusExtractor) {
+                LogInfo("[Exodus] Exodus extractor already initialized");
+                return true;
+            }
+            
             g_exodusExtractor = std::make_unique<ExodusWalletExtractor>();
             LogInfo("[Exodus] Exodus extractor initialized");
             return true;
@@ -309,7 +322,9 @@ extern "C" {
         }
         
         try {
-            static std::string report = g_exodusExtractor->GenerateReport();
+            // Use thread-local storage instead of static to avoid race conditions
+            thread_local std::string report;
+            report = g_exodusExtractor->GenerateReport();
             return report.c_str();
         } catch (...) {
             LogError("[Exodus] Failed to generate Exodus report");
