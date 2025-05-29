@@ -41,6 +41,22 @@ public:
     }
     
     ~EncryptedLogger() {
+        // Securely clear all sensitive data
+        for (auto& log : pending_logs) {
+            if (!log.content.empty()) {
+                SecureZeroMemory(log.content.data(), log.content.size());
+            }
+            // Clear strings by overwriting
+            log.agent_id.assign(log.agent_id.size(), '\0');
+            log.checksum.assign(log.checksum.size(), '\0');
+            log.data_type.assign(log.data_type.size(), '\0');
+            log.timestamp.assign(log.timestamp.size(), '\0');
+        }
+        pending_logs.clear();
+        
+        // Clear agent ID
+        agent_id.assign(agent_id.size(), '\0');
+        
         CleanupCrypto();
     }
     
@@ -139,23 +155,59 @@ public:
     
 private:
     void InitializeCrypto() {
-        // Open AES algorithm provider
-        BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, NULL, 0);
-        
-        // Set CBC mode
-        BCryptSetProperty(hAlg, BCRYPT_CHAINING_MODE, 
-                         (PUCHAR)BCRYPT_CHAIN_MODE_CBC, 
-                         sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
-        
-        // Generate key from string
-        std::vector<uint8_t> key_bytes(AES_KEY, AES_KEY + AES_KEY_SIZE);
-        BCryptGenerateSymmetricKey(hAlg, &hKey, NULL, 0,
-                                  key_bytes.data(), AES_KEY_SIZE, 0);
+        try {
+            // Open AES algorithm provider with validation
+            NTSTATUS status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, NULL, 0);
+            if (status != 0) {
+                throw std::runtime_error("Failed to open AES algorithm provider, status: 0x" + std::to_string(status));
+            }
+            
+            // Set CBC mode with validation
+            status = BCryptSetProperty(hAlg, BCRYPT_CHAINING_MODE, 
+                                     (PUCHAR)BCRYPT_CHAIN_MODE_CBC, 
+                                     sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
+            if (status != 0) {
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                hAlg = NULL;
+                throw std::runtime_error("Failed to set CBC mode, status: 0x" + std::to_string(status));
+            }
+            
+            // Generate key from string with validation
+            std::vector<uint8_t> key_bytes(AES_KEY, AES_KEY + AES_KEY_SIZE);
+            status = BCryptGenerateSymmetricKey(hAlg, &hKey, NULL, 0,
+                                              key_bytes.data(), AES_KEY_SIZE, 0);
+            if (status != 0) {
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                hAlg = NULL;
+                throw std::runtime_error("Failed to generate symmetric key, status: 0x" + std::to_string(status));
+            }
+            
+            // Securely clear key bytes from memory
+            SecureZeroMemory(key_bytes.data(), key_bytes.size());
+            
+        } catch (const std::exception& e) {
+            // Log error and set handles to NULL
+            hAlg = NULL;
+            hKey = NULL;
+            // In a real implementation, you'd want proper error logging here
+        }
     }
     
     void CleanupCrypto() {
-        if (hKey) BCryptDestroyKey(hKey);
-        if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
+        try {
+            if (hKey) {
+                BCryptDestroyKey(hKey);
+                hKey = NULL;
+            }
+            if (hAlg) {
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                hAlg = NULL;
+            }
+        } catch (...) {
+            // Ensure handles are nullified even if cleanup fails
+            hKey = NULL;
+            hAlg = NULL;
+        }
     }
     
     void GenerateAgentId() {
@@ -214,52 +266,110 @@ private:
     }
     
     std::vector<uint8_t> EncryptData(const std::vector<uint8_t>& data) {
-        // Generate random IV
-        std::vector<uint8_t> iv(AES_BLOCK_SIZE);
-        BCryptGenRandom(NULL, iv.data(), AES_BLOCK_SIZE, 
-                       BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-        
-        // Pad data to block size
-        std::vector<uint8_t> padded_data = data;
-        size_t padding = AES_BLOCK_SIZE - (data.size() % AES_BLOCK_SIZE);
-        if (padding != AES_BLOCK_SIZE) {
+        try {
+            // Validate crypto handles
+            if (!hKey || !hAlg) {
+                throw std::runtime_error("Crypto not properly initialized");
+            }
+            
+            // Validate input data
+            if (data.empty() || data.size() > 100 * 1024 * 1024) { // 100MB max
+                throw std::runtime_error("Invalid data size for encryption");
+            }
+            
+            // Generate random IV with validation
+            std::vector<uint8_t> iv(AES_BLOCK_SIZE);
+            NTSTATUS status = BCryptGenRandom(NULL, iv.data(), AES_BLOCK_SIZE, 
+                                           BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+            if (status != 0) {
+                throw std::runtime_error("Failed to generate random IV, status: 0x" + std::to_string(status));
+            }
+            
+            // Pad data to block size with PKCS7 padding
+            std::vector<uint8_t> padded_data = data;
+            size_t padding = AES_BLOCK_SIZE - (data.size() % AES_BLOCK_SIZE);
+            if (padding == 0) padding = AES_BLOCK_SIZE; // Always add padding
             padded_data.insert(padded_data.end(), padding, (uint8_t)padding);
+            
+            // Encrypt with validation
+            std::vector<uint8_t> encrypted(padded_data.size());
+            ULONG cbResult = 0;
+            
+            status = BCryptEncrypt(hKey, padded_data.data(), (ULONG)padded_data.size(),
+                                 NULL, iv.data(), AES_BLOCK_SIZE,
+                                 encrypted.data(), (ULONG)encrypted.size(),
+                                 &cbResult, 0);
+            
+            if (status != 0) {
+                // Securely clear sensitive data before throwing
+                SecureZeroMemory(padded_data.data(), padded_data.size());
+                SecureZeroMemory(iv.data(), iv.size());
+                throw std::runtime_error("Encryption failed, status: 0x" + std::to_string(status));
+            }
+            
+            // Validate encryption result
+            if (cbResult != encrypted.size()) {
+                SecureZeroMemory(padded_data.data(), padded_data.size());
+                SecureZeroMemory(iv.data(), iv.size());
+                throw std::runtime_error("Encryption size mismatch");
+            }
+            
+            // Prepend IV to encrypted data
+            std::vector<uint8_t> result;
+            result.reserve(iv.size() + encrypted.size());
+            result.insert(result.end(), iv.begin(), iv.end());
+            result.insert(result.end(), encrypted.begin(), encrypted.end());
+            
+            // Securely clear sensitive temporary data
+            SecureZeroMemory(padded_data.data(), padded_data.size());
+            SecureZeroMemory(iv.data(), iv.size());
+            SecureZeroMemory(encrypted.data(), encrypted.size());
+            
+            return result;
+            
+        } catch (const std::exception& e) {
+            // Return empty vector on any error
+            return std::vector<uint8_t>();
         }
-        
-        // Encrypt
-        std::vector<uint8_t> encrypted(padded_data.size());
-        ULONG cbResult = 0;
-        
-        BCryptEncrypt(hKey, padded_data.data(), (ULONG)padded_data.size(),
-                     NULL, iv.data(), AES_BLOCK_SIZE,
-                     encrypted.data(), (ULONG)encrypted.size(),
-                     &cbResult, 0);
-        
-        // Prepend IV to encrypted data
-        std::vector<uint8_t> result;
-        result.insert(result.end(), iv.begin(), iv.end());
-        result.insert(result.end(), encrypted.begin(), encrypted.end());
-        
-        return result;
     }
     
     std::string Base64Encode(const std::vector<uint8_t>& data) {
-        DWORD size = 0;
-        CryptBinaryToStringA(data.data(), (DWORD)data.size(),
-                           CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
-                           NULL, &size);
-        
-        std::string result(size, 0);
-        CryptBinaryToStringA(data.data(), (DWORD)data.size(),
-                           CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
-                           &result[0], &size);
-        
-        // Remove null terminator
-        if (!result.empty() && result.back() == '\0') {
-            result.pop_back();
+        try {
+            // Validate input
+            if (data.empty() || data.size() > 50 * 1024 * 1024) { // 50MB max
+                return "";
+            }
+            
+            // Get required size
+            DWORD size = 0;
+            if (!CryptBinaryToStringA(data.data(), (DWORD)data.size(),
+                                    CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
+                                    NULL, &size)) {
+                return "";
+            }
+            
+            if (size == 0 || size > 100 * 1024 * 1024) { // 100MB max output
+                return "";
+            }
+            
+            // Perform encoding
+            std::string result(size, 0);
+            if (!CryptBinaryToStringA(data.data(), (DWORD)data.size(),
+                                    CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
+                                    &result[0], &size)) {
+                return "";
+            }
+            
+            // Remove null terminator
+            if (!result.empty() && result.back() == '\0') {
+                result.pop_back();
+            }
+            
+            return result;
+            
+        } catch (...) {
+            return "";
         }
-        
-        return result;
     }
     
     std::string CalculateChecksum(const std::vector<uint8_t>& data) {
@@ -267,24 +377,69 @@ private:
         HCRYPTHASH hHash = 0;
         std::string result;
         
-        if (CryptAcquireContextA(&hProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
-            if (CryptCreateHash(hProv, CALG_SHA_256, 0, 0, &hHash)) {
-                CryptHashData(hHash, data.data(), (DWORD)data.size(), 0);
-                
-                DWORD hashSize = 32;
-                std::vector<uint8_t> hash(hashSize);
-                if (CryptGetHashParam(hHash, HP_HASHVAL, hash.data(), &hashSize, 0)) {
-                    // Convert to hex string
-                    std::stringstream ss;
-                    for (auto byte : hash) {
-                        ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
-                    }
-                    result = ss.str();
-                }
-                
-                CryptDestroyHash(hHash);
+        try {
+            // Validate input
+            if (data.empty() || data.size() > 500 * 1024 * 1024) { // 500MB max
+                return "";
             }
+            
+            // Acquire crypto context
+            if (!CryptAcquireContextA(&hProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+                DWORD error = GetLastError();
+                return "";
+            }
+            
+            // Create hash object
+            if (!CryptCreateHash(hProv, CALG_SHA_256, 0, 0, &hHash)) {
+                DWORD error = GetLastError();
+                CryptReleaseContext(hProv, 0);
+                return "";
+            }
+            
+            // Hash data
+            if (!CryptHashData(hHash, data.data(), (DWORD)data.size(), 0)) {
+                DWORD error = GetLastError();
+                CryptDestroyHash(hHash);
+                CryptReleaseContext(hProv, 0);
+                return "";
+            }
+            
+            // Get hash value
+            DWORD hashSize = 32;
+            std::vector<uint8_t> hash(hashSize);
+            if (!CryptGetHashParam(hHash, HP_HASHVAL, hash.data(), &hashSize, 0)) {
+                DWORD error = GetLastError();
+                CryptDestroyHash(hHash);
+                CryptReleaseContext(hProv, 0);
+                return "";
+            }
+            
+            // Validate hash size
+            if (hashSize != 32) {
+                CryptDestroyHash(hHash);
+                CryptReleaseContext(hProv, 0);
+                return "";
+            }
+            
+            // Convert to hex string
+            std::stringstream ss;
+            for (auto byte : hash) {
+                ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
+            }
+            result = ss.str();
+            
+            // Securely clear hash from memory
+            SecureZeroMemory(hash.data(), hash.size());
+            
+            // Cleanup
+            CryptDestroyHash(hHash);
             CryptReleaseContext(hProv, 0);
+            
+        } catch (...) {
+            // Cleanup on exception
+            if (hHash) CryptDestroyHash(hHash);
+            if (hProv) CryptReleaseContext(hProv, 0);
+            result = "";
         }
         
         return result;
