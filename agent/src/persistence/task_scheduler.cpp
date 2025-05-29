@@ -4,6 +4,8 @@
 #include <string>
 #include <shlobj.h>
 #include "../common.h"
+#include "../logger/file_logger.h"
+#include "../utils.h"
 
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")

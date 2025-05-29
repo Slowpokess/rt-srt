@@ -49,4 +49,29 @@ public:
      * @return true if created or already exists
      */
     static bool CreateDirectoryRecursive(const std::wstring& path);
+    
+    /**
+     * Check if current user has administrator privileges
+     * @return true if running as administrator
+     */
+    static bool IsUserAdmin();
+    
+    /**
+     * Generate random identifier string
+     * @param length Length of identifier
+     * @return Random identifier string
+     */
+    static std::string GenerateRandomIdentifier(DWORD length = 8);
+    
+    /**
+     * Generate process-like name
+     * @return Process-like name
+     */
+    static std::string GenerateProcessLikeName();
+    
+    /**
+     * Generate service-like name
+     * @return Service-like name
+     */
+    static std::string GenerateServiceLikeName();
 };

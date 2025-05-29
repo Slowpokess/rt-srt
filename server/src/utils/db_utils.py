@@ -345,24 +345,38 @@ def get_dashboard_stats() -> Dict[str, Any]:
 # Database initialization function
 def init_database():
     """Initialize database with default data"""
+    import secrets
+    import string
+    
     with db.get_session() as session:
         # Check if admin user exists
         admin = session.query(User).filter_by(username="admin").first()
         if not admin:
             from ..models.user_model import UserManager
             
+            # Generate secure random password
+            alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+            temp_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+            
             admin = User(
                 username="admin",
                 email="admin@rt-srt.local",
-                password_hash=UserManager.hash_password("changeme"),
+                password_hash=UserManager.hash_password(temp_password),
                 is_admin=True,
                 api_token=UserManager.generate_api_token()
             )
             session.add(admin)
             session.commit()
             
-            logger.info("Created default admin user (username: admin, password: changeme)")
-            logger.warning("IMPORTANT: Change the default admin password immediately!")
+            logger.info(f"Created admin user with temporary password: {temp_password}")
+            logger.warning("IMPORTANT: Password change required on first login!")
+            
+            # Write password to secure file
+            from pathlib import Path
+            password_file = Path("admin_temp_password.txt")
+            password_file.write_text(f"Admin temporary password: {temp_password}\nChange immediately after first login!")
+            password_file.chmod(0o600)  # Read-write for owner only
+            logger.info(f"Temporary password saved to: {password_file.absolute()}")
 
 
 # Export all utilities

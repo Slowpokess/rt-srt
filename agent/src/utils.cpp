@@ -2,6 +2,7 @@
 #include <shlwapi.h>
 #include <codecvt>
 #include <locale>
+#include <cstdlib>
 
 #pragma comment(lib, "shlwapi.lib")
 
@@ -113,4 +114,55 @@ bool Utils::CreateDirectoryRecursive(const std::wstring& path) {
     
     // Create this directory
     return CreateDirectoryW(path.c_str(), NULL) != 0 || GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+bool Utils::IsUserAdmin() {
+    BOOL isAdmin = FALSE;
+    PSID administratorsGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+    
+    // Create a SID for the BUILTIN\Administrators group
+    if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0,
+                                &administratorsGroup)) {
+        // Check if the current user is a member of the administrators group
+        if (!CheckTokenMembership(NULL, administratorsGroup, &isAdmin)) {
+            isAdmin = FALSE;
+        }
+        FreeSid(administratorsGroup);
+    }
+    
+    return isAdmin != FALSE;
+}
+
+std::string Utils::GenerateRandomIdentifier(DWORD length) {
+    const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::string result;
+    result.reserve(length);
+    
+    for (DWORD i = 0; i < length; i++) {
+        result += chars[rand() % chars.size()];
+    }
+    
+    return result;
+}
+
+std::string Utils::GenerateProcessLikeName() {
+    const char* prefixes[] = {"svc", "win", "sys", "ms", "app"};
+    const char* suffixes[] = {"host", "mgr", "srv", "exe", "proc"};
+    
+    int prefixIdx = rand() % 5;
+    int suffixIdx = rand() % 5;
+    
+    return std::string(prefixes[prefixIdx]) + suffixes[suffixIdx] + ".exe";
+}
+
+std::string Utils::GenerateServiceLikeName() {
+    const char* adjectives[] = {"System", "Windows", "Application", "Background", "Runtime"};
+    const char* nouns[] = {"Service", "Manager", "Host", "Framework", "Monitor"};
+    
+    int adjIdx = rand() % 5;
+    int nounIdx = rand() % 5;
+    
+    return std::string(adjectives[adjIdx]) + " " + nouns[nounIdx];
 }

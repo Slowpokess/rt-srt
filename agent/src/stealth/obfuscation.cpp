@@ -2,6 +2,11 @@
 #include <fstream>
 #include <filesystem>
 #include <windows.h>
+#include <sstream>
+#include <iomanip>
+#include <chrono>
+#include <random>
+#include <algorithm>
 
 namespace Utils {
     std::string EncodeHex(const std::vector<uint8_t>& data) {

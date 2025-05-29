@@ -4,6 +4,7 @@
 #include <shlobj.h>
 #include "../common.h"
 #include "../logger/file_logger.h"
+#include "../utils.h"
 
 // RC4 ключ вынесен из класса
 const unsigned char RC4_KEY[16] = {
